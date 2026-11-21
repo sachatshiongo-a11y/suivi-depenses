@@ -59,7 +59,7 @@
   .tete { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; margin: var(--s6) 0 var(--s2); }
   .tete h1, .tete h2 { margin: 0; }
   .tete:has(h1) { margin: var(--s2) 0 var(--s4); }
-  .tete input { width: auto; }
+  .tete label { flex: 0 1 11rem; min-width: 0; }
 
   .cartes { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); grid-auto-rows: 1fr; gap: var(--s3); margin-bottom: var(--s2); }
   @media (max-width: 55.99rem) { .cartes > :last-child:nth-child(odd) { grid-column: 1 / -1; } } /* pas de tuile seule à côté d'un vide */
@@ -76,6 +76,12 @@
   label { display: grid; gap: var(--s1); font-size: .85rem; font-weight: 500; }
   input, select, button, .btn { font: inherit; min-height: 2.75rem; border-radius: .6rem; }
   input, select { font-size: 1rem; /* 16 px : en dessous, Safari sur iPhone zoome à chaque saisie */ width: 100%; padding: 0 var(--s3); background: var(--bg); color: var(--fg); border: 1px solid var(--border); }
+  /* iPhone : sans cela, Safari dessine ses propres listes (plus basses que les champs) et ses champs de date débordent de leur carte. */
+  input, select { -webkit-appearance: none; appearance: none; height: 2.75rem; min-width: 0; max-width: 100%; }
+  select { padding-right: 2.25rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .7rem center; background-size: 1.1rem; }
+  input[type=date], input[type=month] { display: block; text-align: left; }
+  input::-webkit-date-and-time-value { text-align: left; }
+  input[type=file] { height: auto; }
   input[type=file] { padding: var(--s2); }
   button, .btn { cursor: pointer; padding: 0 var(--s4); border: 1px solid transparent; background: var(--primary); color: var(--on-primary); font-weight: 600; transition: filter .15s, background .15s; }
   button:hover { filter: brightness(1.1); }
@@ -153,7 +159,7 @@
   .choix input:focus-visible + span { outline: 3px solid var(--primary); outline-offset: 2px; }
   label.montant { display: flex; align-items: baseline; gap: var(--s2); border-bottom: 2px solid var(--border); }
   label.montant:focus-within { border-color: var(--primary); }
-  .montant input { flex: 1; min-width: 0; min-height: 3.75rem; padding: 0; border: 0; border-radius: 0; background: none; outline: none; font-size: 2.5rem; font-weight: 700; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+  .montant input { flex: 1; min-width: 0; height: 3.75rem; padding: 0; border: 0; border-radius: 0; background: none; outline: none; font-size: 2.5rem; font-weight: 700; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
   .montant input::-webkit-inner-spin-button { display: none; }
   .montant input::placeholder { color: var(--muted); }
   .montant b { font-size: 1.25rem; color: var(--muted); }
