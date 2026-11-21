@@ -135,6 +135,9 @@
   .jour:not(:first-child), .jour + .ligne { border-top: 1px solid var(--border); }
   .outils { display: flex; gap: var(--s2); flex-wrap: wrap; margin: 0 0 var(--s2); }
   .outils input { flex: 1 1 12rem; background: var(--card); }
+  .debut { margin-bottom: var(--s3); }
+  .debut ol { margin: var(--s2) 0 0; padding-left: 1.25rem; display: grid; gap: var(--s1); }
+  .debut a { display: inline-block; padding: var(--s2) 0; color: var(--primary); font-weight: 600; text-underline-offset: .2em; }
   .net { display: grid; gap: var(--s1); }
   .net > span, .net .deux span { color: var(--muted); font-size: .85rem; }
   .net > b { font-size: 2rem; line-height: 1.2; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
@@ -205,7 +208,13 @@
   <form method="dialog" id="fNom">
     <strong id="dlgTitre">Modifier</strong>
     <label>Nom <input name="nom" required></label>
-    <label id="lBudget" hidden><span>Budget mensuel (<span id="dBudget"></span>), vide pour aucun</span><input type="number" name="budget" min="0" step="0.01" inputmode="decimal"></label>
+    <label data-c="budget" hidden><span>Budget mensuel (<span data-devise></span>), vide pour aucun</span><input type="number" name="budget" min="0" step="0.01" inputmode="decimal"></label>
+    <label data-c="objectif" hidden><span>Objectif (<span data-devise></span>), vide pour aucun</span><input type="number" name="objectif" min="0" step="0.01" inputmode="decimal"></label>
+    <label data-c="date" hidden>Date de l'évènement <input type="date" name="date"></label>
+    <label data-c="echeance" hidden>Échéance <input type="date" name="echeance"></label>
+    <label data-c="montant" hidden><span>Montant (<span data-devise></span>)</span><input type="number" name="montant" min="0.01" step="0.01" inputmode="decimal"></label>
+    <label data-c="periode" hidden>Fréquence <select name="periode"><option value="mensuel">Chaque mois</option><option value="hebdo">Chaque semaine</option><option value="annuel">Chaque année</option></select></label>
+    <label data-c="prochaine" hidden>Prochaine échéance <input type="date" name="prochaine"></label>
     <div class="btns"><button class="sec" value="annuler" formnovalidate>Annuler</button><button value="ok">Enregistrer</button></div>
   </form>
 </dialog>
@@ -264,19 +273,19 @@ console.assert(JSON.stringify(soldes([
   { type: 'transfert', compte: 'a', vers: 'c', montant: 100, montantVers: 280000 },
 ])) === '{"a":400,"b":200,"c":280000}', 'soldes() est faux');
 
-// shortcut: une échéance du 31 retombe au 28 puis y reste, à corriger si le jour exact compte.
-function suivant(date, periode) {
+// jour : le jour du mois voulu au départ, pour qu'une échéance du 31 revienne au 31 après février.
+function suivant(date, periode, jour) {
   const t = new Date(date + 'T00:00:00Z');
   if (periode === 'hebdo') t.setUTCDate(t.getUTCDate() + 7);
   else {
-    const j = t.getUTCDate();
+    const j = jour || t.getUTCDate();
     t.setUTCDate(1);
     t.setUTCMonth(t.getUTCMonth() + (periode === 'annuel' ? 12 : 1));
     t.setUTCDate(Math.min(j, new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate()));
   }
   return t.toISOString().slice(0, 10);
 }
-console.assert(suivant('2026-01-31', 'mensuel') === '2026-02-28' && suivant('2026-12-28', 'hebdo') === '2027-01-04' && suivant('2026-03-15', 'annuel') === '2027-03-15', 'suivant() est faux');
+console.assert(suivant('2026-01-31', 'mensuel') === '2026-02-28' && suivant('2026-02-28', 'mensuel', 31) === '2026-03-31' && suivant('2026-12-28', 'hebdo') === '2027-01-04' && suivant('2026-03-15', 'annuel') === '2027-03-15', 'suivant() est faux');
 
 // Met à niveau les données de la première version (une seule devise, pas de taux).
 function migrer(x) {
@@ -366,7 +375,7 @@ const ligneOp = o => {
   const tr = o.type === 'transfert', dv = dev(o.compte), change = tr && dev(o.vers) !== dv;
   return `<li class="ligne op"><button class="rangee" data-act="modifier" data-id="${esc(o.id)}"><span class="txt"><span class="sr">Modifier : </span><strong>${tr ? 'Transfert' : esc(nomCat(o.categorie))}</strong>
     <small>${esc(nomC(o.compte))}${tr ? ' → ' + esc(nomC(o.vers)) : ''}${o.note ? ' · ' + esc(o.note) : ''}${o.recu ? ` · ${ICO.recu.replace('<svg', '<svg class="mini"')} reçu` : ''}</small></span>
-    <span class="droite"><span class="${o.type === 'entree' ? 'plus' : tr ? '' : 'moins'}">${o.type === 'entree' ? '+' : tr ? '' : '−'}${fmt(o.montant, dv)}</span>${change ? `<small>→ ${fmt(o.montantVers, dev(o.vers))} · taux ${nf.format(o.taux)}</small>` : ''}</span></button></li>`;
+    <span class="droite"><span class="${o.type === 'entree' ? 'plus' : tr ? '' : 'moins'}">${o.type === 'entree' ? '+' : tr ? '' : '−'}${fmt(o.montant, dv)}</span>${change ? `<small>→ ${fmt(o.montantVers, dev(o.vers))}</small>` : ''}</span></button></li>`;
 };
 // Sans recherche : le mois choisi. Avec recherche : tout l'historique.
 function opsVisibles() {
@@ -400,6 +409,12 @@ function telecharger(nom, contenu, type) {
   return Promise.resolve();
 }
 const moisTexte = (m, forme) => new Date(m + '-01T00:00:00').toLocaleDateString('fr-FR', forme === 'court' ? { month: 'short' } : { month: 'long', year: 'numeric' });
+
+// Les champs que la fenêtre « Modifier » propose en plus du nom, selon l'élément.
+const ARGENT = ['budget', 'objectif', 'montant'];
+const champsDe = x => d.recurrents.includes(x) ? ['montant', 'periode', 'prochaine']
+  : d.categories.includes(x) ? (x.type === 'sortie' ? ['budget'] : [])
+  : x.type === 'evenement' ? ['objectif', 'date'] : x.type === 'emprunt' || x.type === 'pret' ? ['echeance'] : [];
 
 const vues = {
   tableau() {
@@ -439,7 +454,11 @@ const vues = {
         <div class="droite">${fmt(m, d.principale)}</div><div class="btns">${bIcone('renommer', c, b ? 'Modifier le budget de' : 'Fixer un budget pour', 'nom')}</div></li>`;
     };
     return `
-      <div class="tete"><h1>Tableau de bord</h1><a class="btn fab" href="#operations">${ICO.plus}<span>Ajouter une opération</span></a></div>
+      <div class="tete"><h1>Accueil</h1><a class="btn fab" href="#operations">${ICO.plus}<span>Ajouter une opération</span></a></div>
+      ${d.ops.length ? '' : `<section class="bloc debut" aria-label="Pour commencer"><strong>Pour commencer</strong><ol>
+        <li><a href="#parametres">Réglez le taux du dollar et la devise des totaux</a></li>
+        <li><a href="#parametres">Ajoutez vos comptes : banque, mobile money, épargne</a></li>
+        <li><a href="#operations">Saisissez votre première opération</a></li></ol></section>`}
       <section class="bloc net" aria-label="Situation nette">
         <span>Situation nette</span>
         <b class="${net < 0 ? 'moins' : ''}">${fmt(net, d.principale)}</b>
@@ -481,8 +500,8 @@ const vues = {
       <h1>Opérations</h1>
       <form id="fOp" class="bloc saisie">
         <fieldset><legend class="sr">Type d'opération</legend><div class="choix">${chips('type', [{ v: 'sortie', l: 'Dépense' }, { v: 'entree', l: 'Entrée' }, { v: 'transfert', l: 'Transfert' }], 'sortie')}</div></fieldset>
-        <label class="montant"><span class="sr">Montant</span><input type="number" name="montant" min="0.01" step="0.01" required inputmode="decimal" placeholder="0" aria-describedby="recu"><b id="dMontant"></b></label>
-        <small id="recu" hidden></small>
+        <label class="montant"><span class="sr">Montant</span><input type="number" name="montant" min="0.01" step="0.01" required inputmode="decimal" placeholder="0"><b id="dMontant"></b></label>
+        <label id="lRecuM" hidden><span>Montant reçu (<span id="dRecu"></span>)</span><input type="number" name="recuMontant" min="0.01" step="0.01" inputmode="decimal" aria-describedby="aideRecu"><small id="aideRecu"></small></label>
         <fieldset><legend id="tCompte">Compte</legend><div class="choix" id="cComptes"></div></fieldset>
         <fieldset id="lVers"><legend>Vers</legend><div class="choix" id="cVers"></div></fieldset>
         <fieldset id="lCat"><legend>Catégorie</legend><div class="choix" id="cCats"></div></fieldset>
@@ -617,7 +636,7 @@ const vues = {
 };
 
 function majForm(refaire) {
-  const type = val('type'), tr = type === 'transfert', recu = document.getElementById('recu');
+  const type = val('type'), tr = type === 'transfert';
   if (refaire) {
     const o = d.ops.find(x => x.id === edition) || pre || {};
     document.getElementById('cComptes').innerHTML = chips('compte', comptesPour(tr), o.compte);
@@ -631,8 +650,13 @@ function majForm(refaire) {
   document.getElementById('tCompte').textContent = tr ? 'Depuis' : 'Compte';
   document.getElementById('dMontant').textContent = dv;
   document.getElementById('bOp').textContent = edition ? 'Enregistrer' : { sortie: 'Ajouter la dépense', entree: 'Ajouter l’entrée', transfert: 'Ajouter le transfert' }[type];
-  recu.hidden = !(tr && dvVers !== dv && f.montant.value > 0);
-  if (!recu.hidden) recu.innerHTML = `Montant reçu : ${fmt(conv(Math.round(f.montant.value * 100), dv, dvVers, d.taux), dvVers)} au taux actuel (1 USD = ${nf.format(d.taux)} CDF).`;
+  const change = tr && dvVers !== dv, auto = conv(Math.round(f.montant.value * 100) || 0, dv, dvVers, d.taux);
+  document.getElementById('lRecuM').hidden = !change;
+  if (change) {
+    document.getElementById('dRecu').textContent = dvVers;
+    if (!f.recuMontant.dataset.touche) f.recuMontant.value = auto ? auto / 100 : ''; // proposé au taux des paramètres tant qu'on n'y touche pas
+    document.getElementById('aideRecu').textContent = `Au taux des paramètres (1 USD = ${nf.format(d.taux)} CDF) : ${nombre(auto)} ${dvVers}. Corrigez si le change réel diffère.`;
+  }
 }
 function rendre() {
   const vue = vues[location.hash.slice(1)] ? location.hash.slice(1) : 'tableau';
@@ -646,6 +670,7 @@ function rendre() {
     f.querySelector(`[name=type][value=${type}]`).checked = true;
     if (o) {
       f.montant.value = o.montant / 100; f.date.value = o.date; f.note.value = o.note ?? '';
+      if (o.type === 'transfert' && o.montantVers) { f.recuMontant.value = o.montantVers / 100; f.recuMontant.dataset.touche = '1'; }
       document.getElementById('plus').open = true;
       document.getElementById('bAnnuler').hidden = false;
       for (const [b, visible] of [['bSuppr', true], ['bRecu', o.recu]]) { const e = document.getElementById(b); e.hidden = !visible; e.dataset.id = o.id; }
@@ -729,14 +754,15 @@ const ajouts = {
     avant = JSON.stringify(d);
     const taux = anc?.taux ?? d.taux; // une opération modifiée garde son taux d'origine
     const o = { id: anc?.id ?? id(), date: v.date, type: v.type, montant, compte: v.compte, taux, note: v.note.trim(),
-      ...(tr ? { vers: v.vers, montantVers: conv(montant, dev(v.compte), dev(v.vers), taux) } : { categorie: v.categorie }),
+      ...(tr ? { vers: v.vers, montantVers: dev(v.compte) !== dev(v.vers) && centimes(v.recuMontant) > 0 ? centimes(v.recuMontant) : conv(montant, dev(v.compte), dev(v.vers), taux) } : { categorie: v.categorie }),
       ...(anc?.recu || v.recu?.size ? { recu: true } : {}) };
     if (anc) d.ops[d.ops.indexOf(anc)] = o; else d.ops.push(o);
     if (v.recu?.size) garderRecu(o.id, v.recu);
     edition = null;
     mois = v.date.slice(0, 7);
+    const alerte = v.type !== 'entree' && REELS.includes(cpt(v.compte).type) && soldes(d.ops)[v.compte] < 0 ? `. Attention : le solde du compte ${nomC(v.compte)} passe sous zéro` : '';
     const texte = (v.type === 'entree' ? '+' : tr ? '' : '−') + nombre(montant) + ' ' + dev(v.compte);
-    dire(`${anc ? 'Modifié' : 'Enregistré'} : ${texte} · ${tr ? nomC(v.compte) + ' → ' + nomC(v.vers) : nomCat(v.categorie) + ' · ' + nomC(v.compte)}`, true);
+    dire(`${anc ? 'Modifié' : 'Enregistré'} : ${texte} · ${tr ? nomC(v.compte) + ' → ' + nomC(v.vers) : nomCat(v.categorie) + ' · ' + nomC(v.compte)}${alerte}`, true);
   },
   fEvt(v) { d.comptes.push({ id: id(), nom: v.nom.trim(), type: 'evenement', devise: DEVISES.includes(v.devise) ? v.devise : 'CDF', objectif: centimes(v.objectif || 0), date: v.date }); },
   fDette(v) {
@@ -752,7 +778,7 @@ const ajouts = {
     const montant = centimes(v.montant);
     if (!(montant > 0) || !estDate(v.prochaine)) return 'Montant ou date invalide.';
     if (!cpt(v.compte) || !v.categorie) return 'Il faut un compte et une catégorie de sortie.';
-    d.recurrents.push({ id: id(), nom: v.nom.trim(), genre: v.genre in GENRES ? v.genre : 'recurrent', montant, compte: v.compte, categorie: v.categorie, periode: v.periode in PERIODES ? v.periode : 'mensuel', prochaine: v.prochaine });
+    d.recurrents.push({ id: id(), nom: v.nom.trim(), genre: v.genre in GENRES ? v.genre : 'recurrent', montant, compte: v.compte, categorie: v.categorie, periode: v.periode in PERIODES ? v.periode : 'mensuel', prochaine: v.prochaine, jour: Number(v.prochaine.slice(8)) });
   },
   fCompte(v) { d.comptes.push({ id: id(), nom: v.nom.trim(), type: REELS.includes(v.type) ? v.type : 'banque', devise: DEVISES.includes(v.devise) ? v.devise : 'CDF' }); },
   fCat(v) { d.categories.push({ id: id(), nom: v.nom.trim(), type: v.type in SENS ? v.type : 'sortie' }); },
@@ -796,7 +822,7 @@ const actions = {
     if (!cpt(r.compte) || cpt(r.compte).archive) return 'Le compte de paiement n’existe plus : supprimez ce rappel et recréez-le.';
     faire(`Payé : ${r.nom}, −${nombre(r.montant)}\u00a0${dev(r.compte)} depuis ${nomC(r.compte)}.`, () => {
       d.ops.push({ id: id(), date: auj(), type: 'sortie', montant: r.montant, compte: r.compte, categorie: r.categorie, taux: d.taux, note: r.nom });
-      r.prochaine = suivant(r.prochaine, r.periode);
+      r.prochaine = suivant(r.prochaine, r.periode, r.jour);
     });
   },
   revenir() {
@@ -809,20 +835,24 @@ const actions = {
   rembourser(i) { versOperations(cpt(i).type === 'emprunt' ? { vers: i } : { compte: i }); },
   renommer(i) {
     cible = [...d.comptes, ...d.categories, ...d.recurrents].find(x => x.id === i);
-    const f = document.getElementById('fNom'), avecBudget = d.categories.includes(cible) && cible.type === 'sortie';
+    const f = document.getElementById('fNom'), montre = champsDe(cible);
+    const devise = d.categories.includes(cible) ? d.principale : d.recurrents.includes(cible) ? dev(cible.compte) : cible.devise;
     f.nom.value = cible.nom;
-    document.getElementById('lBudget').hidden = !avecBudget;
-    document.getElementById('dBudget').textContent = d.principale;
-    f.budget.value = avecBudget && cible.budget ? cible.budget / 100 : '';
+    f.querySelectorAll('[data-devise]').forEach(e => e.textContent = devise);
+    f.querySelectorAll('[data-c]').forEach(l => {
+      const k = l.dataset.c;
+      l.hidden = !montre.includes(k);
+      f[k].value = l.hidden ? '' : ARGENT.includes(k) ? (cible[k] ? cible[k] / 100 : '') : cible[k] ?? '';
+    });
     document.getElementById('dlg').showModal();
   },
   mois(i) { mois = i; rendre(); document.querySelector(`[data-act=mois][data-id="${i}"]`)?.focus(); },
   csv() {
     const lignes = opsVisibles().map(o => { const tr = o.type === 'transfert'; return [o.date, tr ? 'Transfert' : SENS[o.type], tr ? '' : nomCat(o.categorie), nomC(o.compte), tr ? nomC(o.vers) : '',
-      (o.montant / 100).toFixed(2).replace('.', ','), dev(o.compte), o.taux, o.note].map(celluleCsv).join(';'); });
+      (o.montant / 100).toFixed(2).replace('.', ','), dev(o.compte), o.taux, o.note, o.recu ? 'oui' : ''].map(celluleCsv).join(';'); });
     if (!lignes.length) return 'Aucune opération à exporter.';
     // Point-virgule et BOM : c'est ce qu'attend Excel en français.
-    telecharger(`operations-${q.trim() ? 'recherche' : mois}.csv`, '\ufeff' + ['Date;Type;Catégorie;Compte;Vers;Montant;Devise;Taux;Note', ...lignes].join('\r\n'), 'text/csv').catch(() => {});
+    telecharger(`operations-${q.trim() ? 'recherche' : mois}.csv`, '\ufeff' + ['Date;Type;Catégorie;Compte;Vers;Montant;Devise;Taux;Note;Reçu', ...lignes].join('\r\n'), 'text/csv').catch(() => {});
   },
   exporter() {
     const envoyer = contenu => telecharger('depenses-' + auj() + '.json', contenu, 'application/json').then(() => { d.sauvegarde = auj(); sauver(); }, () => {});
@@ -855,7 +885,13 @@ document.addEventListener('submit', e => {
   if (f.id === 'fNom') { // method="dialog" : le navigateur ferme la fenêtre
     if (e.submitter?.value === 'ok' && cible && f.nom.value.trim()) {
       cible.nom = f.nom.value.trim();
-      if (!document.getElementById('lBudget').hidden) { const b = centimes(f.budget.value || 0); if (b > 0) cible.budget = b; else delete cible.budget; }
+      for (const k of champsDe(cible)) {
+        const v = f[k].value;
+        if (ARGENT.includes(k)) { const c = centimes(v || 0); if (c > 0) cible[k] = c; else if (k !== 'montant') delete cible[k]; } // un montant vide garde l'ancien
+        else if (k === 'periode') { if (v in PERIODES) cible.periode = v; }
+        else if (estDate(v)) { cible[k] = v; if (k === 'prochaine') cible.jour = Number(v.slice(8)); }
+        else if (k !== 'prochaine') cible[k] = '';
+      }
       sauver();
     }
     return;
@@ -876,7 +912,8 @@ document.addEventListener('click', e => {
   if (err) dire(err);
 });
 document.addEventListener('input', e => {
-  if (e.target.name === 'montant' && e.target.form?.id === 'fOp') majForm();
+  if (e.target.name === 'recuMontant') e.target.dataset.touche = '1';
+  else if (e.target.name === 'montant' && e.target.form?.id === 'fOp') majForm();
   else if (e.target.name === 'q') { q = e.target.value; document.getElementById('histo').innerHTML = histo(); } // sans tout redessiner, pour garder le curseur
 });
 document.addEventListener('change', async e => {
@@ -901,6 +938,7 @@ document.addEventListener('change', async e => {
     } catch { dire('Ce fichier n’est pas une sauvegarde de l’application. Choisissez un fichier « depenses-….json ».'); }
   }
 });
+addEventListener('storage', e => { if (e.key === CLE) { d = charger(); rendre(); } }); // un autre onglet a enregistré : on reprend ses données
 addEventListener('hashchange', () => { rendre(); document.querySelector('#fOp [name=montant]')?.focus(); });
 rendre();
 nettoyerRecus();
