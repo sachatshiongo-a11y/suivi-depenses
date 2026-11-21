@@ -36,9 +36,9 @@
   .skip:focus { left: var(--s2); top: var(--s2); background: var(--card); padding: var(--s2); z-index: 9; }
 
   header { display: flex; align-items: center; justify-content: space-between; padding: var(--s3) var(--s4); padding-top: calc(var(--s3) + env(safe-area-inset-top)); }
-  .logo { font-weight: 700; font-size: 1.1rem; letter-spacing: -.01em; }
+  .logo { font-weight: 700; font-size: 1.125rem; letter-spacing: -.01em; }
   nav { position: fixed; inset: auto 0 0 0; z-index: 5; display: flex; background: var(--nav); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom); }
-  nav a { flex: 1; min-height: 3.5rem; display: grid; place-items: center; align-content: center; gap: 2px; font-size: .72rem; color: var(--muted); text-decoration: none; }
+  nav a { flex: 1; min-height: 3.5rem; display: grid; place-items: center; align-content: center; gap: 2px; font-size: .75rem; color: var(--muted); text-decoration: none; }
   nav a[aria-current] { color: var(--primary); font-weight: 600; }
   main { padding: 0 var(--s4) calc(5.5rem + env(safe-area-inset-bottom)); max-width: 62rem; margin: 0 auto; }
   main:focus { outline: none; }
@@ -46,27 +46,33 @@
     body { display: grid; grid-template: auto 1fr / 13rem 1fr; min-height: 100vh; }
     header { grid-column: 1 / -1; border-bottom: 1px solid var(--border); }
     nav { position: static; flex-direction: column; background: none; backdrop-filter: none; border: 0; padding: var(--s4) var(--s2); gap: var(--s1); }
-    nav a { flex: none; display: flex; justify-content: flex-start; gap: var(--s3); min-height: 2.75rem; padding: 0 var(--s3); border-radius: var(--r); font-size: .95rem; }
+    nav a { flex: none; display: flex; justify-content: flex-start; gap: var(--s3); min-height: 2.75rem; padding: 0 var(--s2); border-radius: var(--r); font-size: 1rem; }
     nav a:hover { background: var(--soft); }
     nav a[aria-current] { background: var(--soft); }
     main { width: 100%; padding: var(--s4) var(--s6) var(--s6); }
   }
 
   h1 { font-size: 1.5rem; line-height: 1.25; margin: var(--s2) 0 var(--s4); letter-spacing: -.02em; }
-  h2 { font-size: 1.05rem; margin: var(--s6) 0 var(--s2); }
+  h2 { font-size: 1.125rem; margin: var(--s6) 0 var(--s2); }
   p { margin: var(--s2) 0; }
-  small, .aide { color: var(--muted); font-size: .82rem; }
-  .tete { display: flex; align-items: end; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
+  small, .aide { color: var(--muted); font-size: .85rem; }
+  .tete { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; margin: var(--s6) 0 var(--s2); }
+  .tete h1, .tete h2 { margin: 0; }
+  .tete:has(h1) { margin: var(--s2) 0 var(--s4); }
+  .tete input { width: auto; }
 
-  .cartes { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: var(--s3); }
+  .cartes { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); grid-auto-rows: 1fr; gap: var(--s3); margin-bottom: var(--s2); }
+  @media (max-width: 55.99rem) { .cartes > :last-child:nth-child(odd) { grid-column: 1 / -1; } } /* pas de tuile seule à côté d'un vide */
   .carte, .bloc { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); padding: var(--s3) var(--s4); }
   .carte { display: grid; gap: 2px; }
-  .carte span { color: var(--muted); font-size: .82rem; }
-  .carte b { font-size: 1.2rem; line-height: 1.3; }
+  .carte span { color: var(--muted); font-size: .85rem; }
+  .carte b { font-size: 1.25rem; line-height: 1.3; }
   .n, .carte b, .droite { font-variant-numeric: tabular-nums; }
   .plus { color: var(--plus); } .moins { color: var(--moins); }
 
-  form.bloc { display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: var(--s3); align-items: end; margin: var(--s3) 0; }
+  form.bloc { display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: var(--s3); align-items: end; margin: 0 0 var(--s3); }
+  form.bloc > button { grid-column: 1 / -1; } /* le bouton de validation a toujours sa propre ligne */
+  @media (min-width: 56rem) { form.bloc > button { justify-self: start; min-width: 12rem; } }
   label { display: grid; gap: var(--s1); font-size: .85rem; font-weight: 500; }
   input, select, button, .btn { font: inherit; min-height: 2.75rem; border-radius: .6rem; }
   input, select { font-size: 1rem; /* 16 px : en dessous, Safari sur iPhone zoome à chaque saisie */ width: 100%; padding: 0 var(--s3); background: var(--bg); color: var(--fg); border: 1px solid var(--border); }
@@ -79,15 +85,29 @@
   .icone { display: inline-grid; place-items: center; width: 2.75rem; height: 2.75rem; padding: 0; background: transparent; color: var(--muted); border-radius: 50%; }
   .icone.danger:hover { color: var(--moins); }
 
-  ul.liste { list-style: none; margin: var(--s2) 0; padding: 0; background: var(--card); border: 1px solid var(--border); border-radius: var(--r); }
-  .ligne { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) var(--s2) var(--s2) var(--s4); min-height: 3.5rem; flex-wrap: wrap; }
+  ul.liste { list-style: none; margin: 0 0 var(--s2); padding: 0; background: var(--card); border: 1px solid var(--border); border-radius: var(--r); }
+  .ligne { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--s3); row-gap: var(--s1); align-items: center; padding: var(--s2) var(--s4); min-height: 3.5rem; }
+  .ligne .btns { grid-column: 1 / -1; justify-content: flex-end; }
+  .ligne.compact { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .ligne.compact .btns { grid-column: auto; }
+  .ligne .btns:empty, .droite:empty { display: none; }
+  .ligne .btns .icone:last-child { margin-right: calc(-1 * var(--s2)); }
+  @media (min-width: 56rem) {
+    .ligne { grid-template-columns: minmax(0, 1fr) auto auto; }
+    .ligne:not(.compact) .btns { grid-column: auto; min-width: 15rem; } /* largeur fixe : les montants forment une colonne */
+  }
+  .ligne.op { display: block; padding: 0; }
+  .rangee { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s3); align-items: center; width: 100%; min-height: 3.5rem; padding: var(--s2) var(--s4); background: none; color: inherit; border: 0; border-radius: 0; font-weight: 400; text-align: left; }
+  .rangee:hover { background: var(--soft); filter: none; }
+  .ligne:last-child .rangee { border-radius: 0 0 var(--r) var(--r); }
+  .mini { width: .95rem; height: .95rem; vertical-align: -.15rem; }
   .ligne + .ligne { border-top: 1px solid var(--border); }
-  .txt { flex: 1 1 9rem; min-width: 0; display: grid; }
+  .txt { min-width: 0; display: grid; }
   .txt strong { font-weight: 600; overflow-wrap: anywhere; }
   .droite { text-align: right; font-weight: 600; white-space: nowrap; display: grid; }
   .droite small { font-weight: 400; }
   .btns { display: flex; gap: var(--s1); align-items: center; flex-wrap: wrap; }
-  .badge { display: inline-block; font-size: .72rem; font-weight: 600; padding: 0 .5rem; border-radius: 1rem; background: var(--soft); color: var(--fg); vertical-align: middle; white-space: nowrap; }
+  .badge { display: inline-block; font-size: .75rem; font-weight: 600; padding: 0 .5rem; border-radius: 1rem; background: var(--soft); color: var(--fg); vertical-align: middle; white-space: nowrap; }
   .badge.retard { background: var(--moins); color: var(--card); }
   .barre { height: .4rem; border-radius: 1rem; background: var(--soft); overflow: hidden; margin-top: var(--s1); }
   .barre i { display: block; height: 100%; background: var(--primary); border-radius: inherit; }
@@ -100,14 +120,14 @@
   .paire i { width: 36%; max-width: 1.25rem; min-height: 2px; border-radius: 3px 3px 0 0; }
   i.e, .legende .e { background: var(--plus); }
   i.s, .legende .s { background: var(--moins); }
-  .legende { display: flex; align-items: center; gap: var(--s2); margin: var(--s2) 0 var(--s3); font-size: .82rem; color: var(--muted); }
+  .legende { display: flex; align-items: center; gap: var(--s2); margin: var(--s2) 0 var(--s3); font-size: .85rem; color: var(--muted); }
   .legende span { width: .7rem; height: .7rem; border-radius: 2px; }
   .legende .s { margin-left: var(--s3); }
   .barre.depasse i { background: var(--moins); }
-  .jour { display: flex; justify-content: space-between; gap: var(--s3); padding: var(--s2) var(--s4); font-size: .82rem; font-weight: 600; color: var(--muted); background: var(--bg); }
+  .jour { display: flex; justify-content: space-between; gap: var(--s3); padding: var(--s2) var(--s4); font-size: .85rem; font-weight: 600; color: var(--muted); background: var(--bg); }
   .jour:first-child { border-radius: var(--r) var(--r) 0 0; }
   .jour:not(:first-child), .jour + .ligne { border-top: 1px solid var(--border); }
-  .outils { display: flex; gap: var(--s2); flex-wrap: wrap; margin: var(--s2) 0; }
+  .outils { display: flex; gap: var(--s2); flex-wrap: wrap; margin: 0 0 var(--s2); }
   .outils input { flex: 1 1 12rem; background: var(--card); }
   .net { display: grid; gap: var(--s1); }
   .net > span, .net .deux span { color: var(--muted); font-size: .85rem; }
@@ -115,7 +135,7 @@
   .net .deux { grid-template-columns: 1fr 1fr; margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--border); }
   .net .deux span { display: block; }
   .net .deux strong { font-variant-numeric: tabular-nums; }
-  .rappel { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; margin: 0 0 var(--s3); }
+  .rappel { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin: var(--s3) 0 0; padding-right: var(--s2); }
 
   #toast { position: fixed; left: 50%; bottom: calc(8.5rem + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: var(--s3); width: max-content; max-width: calc(100vw - 2rem); background: var(--fg); color: var(--bg); padding: var(--s2) var(--s2) var(--s2) var(--s4); min-height: 3.25rem; border-radius: var(--r); font-weight: 600; box-shadow: 0 8px 24px rgba(2, 6, 23, .3); }
   #toast.err { background: var(--moins); color: var(--card); padding-right: var(--s4); }
@@ -128,7 +148,7 @@
   .choix { display: flex; flex-wrap: wrap; gap: var(--s2); }
   .choix label { display: block; position: relative; }
   .choix input { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0; opacity: 0; cursor: pointer; }
-  .choix span { display: grid; place-items: center; min-height: 2.75rem; padding: 0 var(--s4); border: 1px solid var(--border); border-radius: 2rem; font-size: .95rem; font-weight: 500; transition: background .15s, color .15s; }
+  .choix span { display: grid; place-items: center; min-height: 2.75rem; padding: 0 var(--s4); border: 1px solid var(--border); border-radius: 2rem; font-size: 1rem; font-weight: 500; transition: background .15s, color .15s; }
   .choix input:checked + span { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
   .choix input:focus-visible + span { outline: 3px solid var(--primary); outline-offset: 2px; }
   label.montant { display: flex; align-items: baseline; gap: var(--s2); border-bottom: 2px solid var(--border); }
@@ -137,11 +157,22 @@
   .montant input::-webkit-inner-spin-button { display: none; }
   .montant input::placeholder { color: var(--muted); }
   .montant b { font-size: 1.25rem; color: var(--muted); }
-  summary { cursor: pointer; padding: var(--s3) 0; color: var(--muted); font-size: .9rem; }
+  summary { cursor: pointer; padding: var(--s3) 0; color: var(--muted); font-size: .85rem; }
   .deux { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--s3); }
-  #bOp { flex: 1; }
-  .fab { display: inline-grid; place-items: center; text-decoration: none; }
-  @media (max-width: 55.99rem) { .fab { position: fixed; right: var(--s4); bottom: calc(4.5rem + env(safe-area-inset-bottom)); z-index: 6; border-radius: 2rem; box-shadow: 0 6px 18px rgba(2, 6, 23, .35); } }
+  #bOp { flex: 1 1 8rem; }
+  .saisie > .btns:not(:has(button:not([hidden]))) { display: none; }
+  @media (min-width: 56rem) { #bOp { flex: 0 0 16rem; } }
+  @media (max-width: 55.99rem) { .saisie > .valider { position: sticky; bottom: calc(3.5rem + env(safe-area-inset-bottom)); z-index: 2; margin: 0 calc(-1 * var(--s4)) calc(-1 * var(--s3)); padding: var(--s2) var(--s4) var(--s3); background: var(--card); border-top: 1px solid var(--border); border-radius: 0 0 var(--r) var(--r); } }
+  .fab { display: inline-flex; align-items: center; gap: var(--s2); text-decoration: none; }
+  @media (max-width: 55.99rem) {
+    .fab { position: fixed; right: var(--s4); bottom: calc(4.5rem + env(safe-area-inset-bottom)); z-index: 6; justify-content: center; width: 3.5rem; height: 3.5rem; padding: 0; border-radius: 50%; box-shadow: 0 6px 18px rgba(2, 6, 23, .35); }
+    .fab span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    main { padding-bottom: calc(9rem + env(safe-area-inset-bottom)); } /* la dernière ligne peut remonter au-dessus du bouton rond */
+  }
+  details.ajout { margin: 0 0 var(--s3); padding: 0 var(--s4); }
+  details.ajout > summary { display: flex; align-items: center; gap: var(--s2); min-height: 3rem; padding: 0; color: var(--fg); font-size: 1rem; font-weight: 600; list-style: none; }
+  details.ajout > summary::-webkit-details-marker { display: none; }
+  details.ajout > form.bloc { margin: 0; padding: var(--s2) 0 var(--s4); border: 0; background: none; }
   dialog { border: 1px solid var(--border); border-radius: var(--r); background: var(--card); color: var(--fg); padding: var(--s4); width: min(24rem, calc(100vw - 2rem)); }
   dialog::backdrop { background: rgba(2, 6, 23, .55); }
   dialog form { display: grid; gap: var(--s3); }
@@ -191,10 +222,11 @@ const TYPES = { banque: 'Banque', especes: 'Espèces', mobile: 'Mobile money', e
 const REELS = ['banque', 'especes', 'mobile', 'epargne', 'investissement'];
 const SENS = { sortie: 'Sortie', entree: 'Entrée' };
 const DEVISES = ['CDF', 'USD'];
-const PERIODES = { hebdo: 'Chaque semaine', mensuel: 'Chaque mois', annuel: 'Chaque année' };
+const PERIODES = { mensuel: 'Chaque mois', hebdo: 'Chaque semaine', annuel: 'Chaque année' };
 const GENRES = { abonnement: 'Abonnement', recurrent: 'Dépense récurrente' };
 const ICO = {
   suppr: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
   nom: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
   recu: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6"/></svg>',
 };
@@ -305,7 +337,7 @@ const bIcone = (act, x, verbe, ico, cls = '') => `<button class="icone ${cls}" d
 const bSuppr = (act, x) => bIcone(act, x, 'Supprimer', 'suppr', 'danger');
 const bNom = x => bIcone('renommer', x, 'Renommer', 'nom');
 const bTexte = (act, x, texte) => `<button class="sec" data-act="${act}" data-id="${esc(x.id)}">${texte}</button>`;
-const ligne = (titre, sous, droite, boutons = '') => `<li class="ligne"><div class="txt"><strong>${titre}</strong><small>${sous}</small></div><div class="droite">${droite}</div><div class="btns">${boutons}</div></li>`;
+const ligne = (titre, sous, droite, boutons = '') => `<li class="ligne${boutons.includes('class="sec"') ? '' : ' compact'}"><div class="txt"><strong>${titre}</strong><small>${sous}</small></div><div class="droite">${droite}</div><div class="btns">${boutons}</div></li>`;
 const liste = (lignes, vide) => lignes.length ? `<ul class="liste">${lignes.join('')}</ul>` : `<p class="bloc vide">${vide}</p>`;
 const echeance = date => { const j = jours(date); return j < 0 ? `<span class="badge retard">En retard de ${-j} j</span>` : `<span class="badge">${j ? 'Dans ' + j + ' j' : 'Aujourd’hui'}</span>`; };
 
@@ -316,19 +348,19 @@ function carte(titre, p) {
   const tot = enPrincipal(p), mixte = p[DEVISES.find(x => x !== d.principale)];
   return `<div class="carte"><span>${titre}</span><b class="${tot < 0 ? 'moins' : ''}">${fmtTuile(tot, d.principale)}</b>${mixte ? `<small>${fmt(p.CDF, 'CDF')} + ${fmt(p.USD, 'USD')}</small>` : ''}</div>`;
 }
-const ligneRec = r => ligne(
+// court : sur l'accueil, une seule action par ligne.
+const ligneRec = (r, court) => ligne(
   `${esc(r.nom)} <span class="badge">${GENRES[r.genre] ?? ''}</span>`,
   `${PERIODES[r.periode] ?? ''} · ${esc(nomC(r.compte))} · ${dateFr(r.prochaine)} ${echeance(r.prochaine)}`,
   fmt(r.montant, dev(r.compte)),
-  bTexte('payer', r, 'Payer') + bNom(r) + bSuppr('supprRec', r));
+  bTexte('payer', r, 'Payer') + (court ? '' : bNom(r) + bSuppr('supprRec', r)));
 
+// Toute la ligne est un bouton : la toucher ouvre l'opération dans le formulaire, où on la modifie ou la supprime.
 const ligneOp = o => {
   const tr = o.type === 'transfert', dv = dev(o.compte), change = tr && dev(o.vers) !== dv;
-  return ligne(
-    tr ? 'Transfert' : esc(nomCat(o.categorie)),
-    `${esc(nomC(o.compte))}${tr ? ' → ' + esc(nomC(o.vers)) : ''}${o.note ? ' · ' + esc(o.note) : ''}`,
-    `<span class="${o.type === 'entree' ? 'plus' : tr ? '' : 'moins'}">${o.type === 'entree' ? '+' : tr ? '' : '−'}${fmt(o.montant, dv)}</span>${change ? `<small>→ ${fmt(o.montantVers, dev(o.vers))} · taux ${nf.format(o.taux)}</small>` : ''}`,
-    (o.recu ? bIcone('recu', o, 'Voir le reçu de', 'recu') : '') + (cpt(o.compte)?.archive || cpt(o.vers)?.archive ? '' : bIcone('modifier', o, 'Modifier', 'nom')) + bSuppr('supprOp', o));
+  return `<li class="ligne op"><button class="rangee" data-act="modifier" data-id="${esc(o.id)}"><span class="txt"><span class="sr">Modifier : </span><strong>${tr ? 'Transfert' : esc(nomCat(o.categorie))}</strong>
+    <small>${esc(nomC(o.compte))}${tr ? ' → ' + esc(nomC(o.vers)) : ''}${o.note ? ' · ' + esc(o.note) : ''}${o.recu ? ` · ${ICO.recu.replace('<svg', '<svg class="mini"')} reçu` : ''}</small></span>
+    <span class="droite"><span class="${o.type === 'entree' ? 'plus' : tr ? '' : 'moins'}">${o.type === 'entree' ? '+' : tr ? '' : '−'}${fmt(o.montant, dv)}</span>${change ? `<small>→ ${fmt(o.montantVers, dev(o.vers))} · taux ${nf.format(o.taux)}</small>` : ''}</span></button></li>`;
 };
 // Sans recherche : le mois choisi. Avec recherche : tout l'historique.
 function opsVisibles() {
@@ -384,7 +416,7 @@ const vues = {
       ? `<p class="bloc rappel"><span>${jSauv === null ? 'Vos données n’ont jamais été sauvegardées.' : `Dernière sauvegarde il y a ${jSauv} jours.`}</span><button class="sec" data-act="exporter">Sauvegarder</button></p>` : '';
     // Tout ce qui a une date proche : récurrents et dettes à 7 jours (ou en retard), évènements à 30 jours.
     const aVenir = [
-      ...d.recurrents.filter(r => jours(r.prochaine) <= 7).map(r => [r.prochaine, ligneRec(r)]),
+      ...d.recurrents.filter(r => jours(r.prochaine) <= 7).map(r => [r.prochaine, ligneRec(r, true)]),
       ...actifs('emprunt', 'pret').filter(c => estDate(c.echeance) && jours(c.echeance) <= 7 && (c.type === 'emprunt' ? -1 : 1) * (s[c.id] || 0) > 0).map(c => [c.echeance, ligne(
         esc(c.nom), `${c.type === 'emprunt' ? 'À rembourser' : 'À recevoir'} · ${dateFr(c.echeance)} ${echeance(c.echeance)}`,
         fmt(Math.abs(s[c.id]), c.devise), bTexte('rembourser', c, c.type === 'emprunt' ? 'Rembourser' : 'Encaisser'))]),
@@ -395,14 +427,13 @@ const vues = {
     const ligneCat = ({ c, m }) => {
       const b = c.budget, part = b ? m / b : m / maxC;
       const etat = !b ? '' : m > b ? '<span class="badge retard">Dépassé</span>' : m >= .8 * b ? '<span class="badge">Bientôt atteint</span>' : '';
-      return `<li class="ligne"><div class="txt"><strong>${esc(c.nom)} ${etat}</strong>
+      return `<li class="ligne compact"><div class="txt"><strong>${esc(c.nom)} ${etat}</strong>
         <small>${b ? `${fmt(m, d.principale)} sur ${fmt(b, d.principale)}` : `${Math.round(m / (sorties || 1) * 100)} % des dépenses du mois`}</small>
         <div class="barre${b && m > b ? ' depasse' : ''}"><i style="width:${Math.min(100, Math.round(part * 100))}%"></i></div></div>
         <div class="droite">${fmt(m, d.principale)}</div><div class="btns">${bIcone('renommer', c, b ? 'Modifier le budget de' : 'Fixer un budget pour', 'nom')}</div></li>`;
     };
     return `
-      <div class="tete"><h1>Tableau de bord</h1><a class="btn fab" href="#operations">Ajouter une opération</a></div>
-      ${rappel}
+      <div class="tete"><h1>Tableau de bord</h1><a class="btn fab" href="#operations">${ICO.plus}<span>Ajouter une opération</span></a></div>
       <section class="bloc net" aria-label="Situation nette">
         <span>Situation nette</span>
         <b class="${net < 0 ? 'moins' : ''}">${fmt(net, d.principale)}</b>
@@ -412,6 +443,7 @@ const vues = {
           <div><span>Je dois</span><strong class="${enPrincipal(dois) > 0 ? 'moins' : ''}">${fmt(enPrincipal(dois), d.principale)}</strong></div>
         </div>
       </section>
+      ${rappel}
       ${aVenir.length ? `<h2>À ne pas oublier</h2>${liste(aVenir)}` : ''}
       <div class="tete"><h2>Entrées et sorties</h2>${choixMois()}</div>
       <div class="graph">${flux.map(f => `<button class="col" data-act="mois" data-id="${f.m}" aria-pressed="${f.m === mois}" aria-label="${moisTexte(f.m)} : entrées ${fmt(f.e, d.principale)}, sorties ${fmt(f.s, d.principale)}">
@@ -453,12 +485,13 @@ const vues = {
           <label>Note <input name="note"></label>
           <label>Photo du reçu <input type="file" name="recu" accept="image/*"></label>
         </div></details>
-        <div class="btns"><button id="bOp"></button><button type="button" class="sec" id="bAnnuler" data-act="annulerEdition" hidden>Annuler</button></div>
+        <div class="btns"><button type="button" class="sec" id="bRecu" data-act="recu" hidden>Voir le reçu</button><button type="button" class="sec" id="bSuppr" data-act="supprOp" hidden>Supprimer l'opération</button></div>
+        <div class="btns valider"><button id="bOp"></button><button type="button" class="sec" id="bAnnuler" data-act="annulerEdition" hidden>Annuler</button></div>
       </form>
       <div class="tete"><h2>Historique</h2>${choixMois()}</div>
       <div class="outils">
         <label class="sr" for="q">Rechercher dans tout l'historique</label>
-        <input type="search" id="q" name="q" placeholder="Rechercher : note, catégorie, compte, montant" value="${esc(q)}">
+        <input type="search" id="q" name="q" placeholder="Rechercher une opération" value="${esc(q)}">
         <button type="button" class="sec" data-act="csv">Exporter en CSV</button>
       </div>
       <div id="histo">${histo()}</div>`;
@@ -469,13 +502,15 @@ const vues = {
     return `
       <h1>Évènements</h1>
       <p class="aide">Un évènement est une enveloppe : on y met de l'argent de côté par transfert, et on paie ses dépenses depuis elle.</p>
-      <form id="fEvt" class="bloc">
+      <details class="bloc ajout"${!actifs('evenement').length ? ' open' : ''}><summary>${ICO.plus}Ajouter un évènement</summary>
+        <form id="fEvt" class="bloc">
         <label>Nom de l'évènement <input name="nom" required></label>
         <label>Devise <select name="devise">${options(DEVISES)}</select></label>
         <label>Objectif (facultatif) <input type="number" name="objectif" min="0" step="0.01" inputmode="decimal"></label>
         <label>Date (facultative) <input type="date" name="date"></label>
-        <button>Créer</button>
+        <button>Ajouter</button>
       </form>
+      </details>
       ${liste(actifs('evenement').map(e => {
         const v = s[e.id] || 0;
         return `<li class="ligne"><div class="txt"><strong>${esc(e.nom)}</strong><small>${dateFr(e.date)}</small>
@@ -494,15 +529,17 @@ const vues = {
       bTexte('rembourser', c, type === 'emprunt' ? 'Rembourser' : 'Encaisser') + bNom(c) + bSuppr('supprCompte', c))), vide);
     return `
       <h1>Emprunts et prêts</h1>
-      <form id="fDette" class="bloc">
+      <details class="bloc ajout"${!actifs('emprunt', 'pret').length ? ' open' : ''}><summary>${ICO.plus}Ajouter un emprunt ou un prêt</summary>
+        <form id="fDette" class="bloc">
         <label>Sens <select name="sens"><option value="emprunt">J'ai emprunté</option><option value="pret">J'ai prêté</option></select></label>
         <label>Personne ou organisme <input name="nom" required></label>
         <label>Montant <input type="number" name="montant" min="0.01" step="0.01" required inputmode="decimal"></label>
         <label>Compte concerné <select name="compte" required>${optsComptes(...REELS)}</select></label>
         <label>Date <input type="date" name="date" required value="${auj()}"></label>
         <label>Échéance (facultative) <input type="date" name="echeance"></label>
-        <button>Enregistrer</button>
+        <button>Ajouter</button>
       </form>
+      </details>
       <p class="aide">Le montant est dans la devise du compte choisi. Il entre sur ce compte pour un emprunt et en sort pour un prêt.</p>
       <h2>Ce que je dois</h2>${bloc('emprunt', -1, 'Aucun emprunt.')}
       <h2>Ce qu'on me doit</h2>${bloc('pret', 1, 'Aucun prêt.')}`;
@@ -512,12 +549,14 @@ const vues = {
     const parMois = { hebdo: 52 / 12, mensuel: 1, annuel: 1 / 12 };
     const cout = genre => d.recurrents.filter(r => r.genre === genre).reduce((a, r) => a + conv(r.montant, dev(r.compte), d.principale, d.taux) * (parMois[r.periode] || 0), 0);
     return `
-      <h1>Abonnements et dépenses récurrentes</h1>
+      <h1>Récurrents</h1>
+      <p class="aide">Abonnements et dépenses qui reviennent. Le rappel apparaît sur l'accueil 7 jours avant l'échéance ; « Payer » crée la sortie et reporte l'échéance.</p>
       <div class="cartes">
         <div class="carte"><span>Abonnements, par mois</span><b>${fmt(Math.round(cout('abonnement')), d.principale)}</b></div>
         <div class="carte"><span>Autres récurrentes, par mois</span><b>${fmt(Math.round(cout('recurrent')), d.principale)}</b></div>
       </div>
-      <form id="fRec" class="bloc">
+      <details class="bloc ajout"${!d.recurrents.length ? ' open' : ''}><summary>${ICO.plus}Ajouter un abonnement ou une dépense récurrente</summary>
+        <form id="fRec" class="bloc">
         <label>Nom <input name="nom" required></label>
         <label>Genre <select name="genre">${options(Object.keys(GENRES), GENRES)}</select></label>
         <label>Montant <input type="number" name="montant" min="0.01" step="0.01" required inputmode="decimal"></label>
@@ -527,8 +566,8 @@ const vues = {
         <label>Prochaine échéance <input type="date" name="prochaine" required value="${auj()}"></label>
         <button>Ajouter</button>
       </form>
-      <p class="aide">Le rappel apparaît sur le tableau de bord 7 jours avant l'échéance. « Payer » crée la sortie et reporte l'échéance.</p>
-      ${liste([...d.recurrents].sort((a, b) => a.prochaine.localeCompare(b.prochaine)).map(ligneRec), 'Aucun abonnement ni dépense récurrente.')}`;
+      </details>
+      ${liste([...d.recurrents].sort((a, b) => a.prochaine.localeCompare(b.prochaine)).map(r => ligneRec(r)), 'Aucun abonnement ni dépense récurrente.')}`;
   },
 
   parametres() {
@@ -542,20 +581,24 @@ const vues = {
       </form>
       <p class="aide">Un nouveau taux ne s'applique qu'aux opérations saisies ensuite. Les opérations déjà saisies gardent leur taux.</p>
       <h2>Comptes</h2>
-      <form id="fCompte" class="bloc">
+      <details class="bloc ajout"${!actifs(...REELS).length ? ' open' : ''}><summary>${ICO.plus}Ajouter un compte</summary>
+        <form id="fCompte" class="bloc">
         <label>Nom <input name="nom" required></label>
         <label>Type <select name="type">${options(REELS, TYPES)}</select></label>
         <label>Devise <select name="devise">${options(DEVISES)}</select></label>
         <button>Ajouter</button>
       </form>
+      </details>
       ${liste(actifs(...REELS).map(c => ligne(esc(c.nom), `${TYPES[c.type]} · ${esc(c.devise)}`, '', bNom(c) + bSuppr('supprCompte', c))), 'Aucun compte.')}
       ${d.comptes.some(c => c.archive) ? `<h2>Archivés</h2>${liste(d.comptes.filter(c => c.archive).map(c => ligne(esc(c.nom), `${TYPES[c.type]} · ${esc(c.devise)}`, '', bTexte('restaurer', c, 'Restaurer'))))}` : ''}
       <h2>Catégories</h2>
-      <form id="fCat" class="bloc">
+      <details class="bloc ajout"${!d.categories.length ? ' open' : ''}><summary>${ICO.plus}Ajouter une catégorie</summary>
+        <form id="fCat" class="bloc">
         <label>Libellé <input name="nom" required></label>
         <label>Type <select name="type">${options(Object.keys(SENS), SENS)}</select></label>
         <button>Ajouter</button>
       </form>
+      </details>
       ${liste(d.categories.map(c => ligne(esc(c.nom), SENS[c.type] ?? '', '', bNom(c) + bSuppr('supprCat', c))), 'Aucune catégorie.')}
       <h2>Sauvegarde</h2>
       <p class="aide">Les données et les photos de reçus sont enregistrées sur cet appareil uniquement ; la sauvegarde contient les deux. ${d.sauvegarde ? 'Dernière sauvegarde : ' + dateFr(d.sauvegarde) + '.' : 'Aucune sauvegarde pour l’instant.'}</p>
@@ -581,7 +624,7 @@ function majForm(refaire) {
   document.getElementById('lCat').hidden = tr;
   document.getElementById('tCompte').textContent = tr ? 'Depuis' : 'Compte';
   document.getElementById('dMontant').textContent = dv;
-  document.getElementById('bOp').textContent = edition ? 'Enregistrer la modification' : { sortie: 'Ajouter la dépense', entree: 'Ajouter l’entrée', transfert: 'Ajouter le transfert' }[type];
+  document.getElementById('bOp').textContent = edition ? 'Enregistrer' : { sortie: 'Ajouter la dépense', entree: 'Ajouter l’entrée', transfert: 'Ajouter le transfert' }[type];
   recu.hidden = !(tr && dvVers !== dv && f.montant.value > 0);
   if (!recu.hidden) recu.innerHTML = `Montant reçu : ${fmt(conv(Math.round(f.montant.value * 100), dv, dvVers, d.taux), dvVers)} au taux actuel (1 USD = ${nf.format(d.taux)} CDF).`;
 }
@@ -599,6 +642,7 @@ function rendre() {
       f.montant.value = o.montant / 100; f.date.value = o.date; f.note.value = o.note ?? '';
       document.getElementById('plus').open = true;
       document.getElementById('bAnnuler').hidden = false;
+      for (const [b, visible] of [['bSuppr', true], ['bRecu', o.recu]]) { const e = document.getElementById(b); e.hidden = !visible; e.dataset.id = o.id; }
     }
     majForm(true);
     pre = null;
@@ -721,7 +765,11 @@ const ajouts = {
 const actions = {
   supprOp(i) { avant = JSON.stringify(d); d.ops = d.ops.filter(o => o.id !== i); if (edition === i) edition = null; sauver(); dire('Opération supprimée.', true); },
   annuler() { if (!avant) return; d = JSON.parse(avant); avant = null; edition = null; document.getElementById('toast').hidden = true; sauver(); },
-  modifier(i) { edition = i; rendre(); scrollTo(0, 0); document.querySelector('#fOp [name=montant]').focus(); },
+  modifier(i) {
+    const o = d.ops.find(x => x.id === i);
+    if (cpt(o.compte)?.archive || cpt(o.vers)?.archive) return 'Cette opération touche un compte archivé : restaurez-le dans les paramètres pour la modifier.';
+    edition = i; rendre(); scrollTo(0, 0); document.querySelector('#fOp [name=montant]').focus();
+  },
   annulerEdition() { edition = null; rendre(); },
   supprCompte(i) {
     const c = cpt(i);
