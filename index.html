@@ -227,7 +227,8 @@
   <form method="dialog" id="fNom">
     <strong id="dlgTitre">Modifier</strong>
     <label>Nom <input name="nom" required></label>
-    <label data-c="budget" hidden><span>Budget mensuel (<span data-devise></span>), vide pour aucun</span><input type="number" name="budget" min="0" step="0.01" inputmode="decimal"></label>
+    <label data-c="budget" hidden><span>Budget (<span data-devise></span>), vide pour aucun</span><input type="number" name="budget" min="0" step="0.01" inputmode="decimal"></label>
+    <label data-c="budgetPeriode" hidden>Période du budget <select name="budgetPeriode"><option value="mois">Par mois</option><option value="semaine">Par semaine (du lundi au dimanche)</option></select></label>
     <label data-c="objectif" hidden><span>Objectif (<span data-devise></span>), vide pour aucun</span><input type="number" name="objectif" min="0" step="0.01" inputmode="decimal"></label>
     <label data-c="date" hidden>Date de l'évènement <input type="date" name="date"></label>
     <label data-c="echeance" hidden>Échéance <input type="date" name="echeance"></label>
@@ -257,7 +258,7 @@ const REELS = ['banque', 'especes', 'mobile', 'epargne', 'investissement'];
 const SENS = { sortie: 'Sortie', entree: 'Entrée' };
 const DEVISES = ['CDF', 'USD'];
 const PERIODES = { mensuel: 'Chaque mois', hebdo: 'Chaque semaine', annuel: 'Chaque année' };
-const GENRES = { abonnement: 'Abonnement', recurrent: 'Dépense récurrente' };
+const GENRES = { abonnement: 'Abonnement', recurrent: 'Dépense récurrente', entree: 'Entrée récurrente' };
 const ICO = {
   suppr: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
   transfert: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h14m0 0-3-3m3 3-3 3M20 16H6m0 0 3-3m-3 3 3 3"/></svg>',
@@ -341,6 +342,9 @@ const nomC = i => cpt(i)?.nom ?? '(supprimé)';
 const nomCat = i => d.categories.find(c => c.id === i)?.nom ?? '(supprimée)';
 const fmt = (c, dv) => nombre(c) + ' ' + esc(dv);
 const enPrincipale = o => conv(o.montant, dev(o.compte), d.principale, o.taux); // au taux du jour de l'opération
+// Le lundi de la semaine d'une date : les budgets hebdomadaires vont du lundi au dimanche.
+function lundi(date) { const t = new Date(date + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - (t.getUTCDay() + 6) % 7); return t.toISOString().slice(0, 10); }
+console.assert(lundi('2026-11-21') === '2026-11-16' && lundi('2026-11-16') === '2026-11-16' && lundi('2026-11-22') === '2026-11-16' && lundi('2026-11-23') === '2026-11-23', 'lundi() est faux');
 const jours = date => Math.round((Date.parse(date) - Date.parse(auj())) / 864e5);
 const dateFr = s => estDate(s) ? new Date(s + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 
@@ -394,8 +398,8 @@ function carte(titre, p, teinte) {
 const ligneRec = (r, court) => ligne(
   `${esc(r.nom)} <span class="badge">${GENRES[r.genre] ?? ''}</span>`,
   `${PERIODES[r.periode] ?? ''} · ${esc(nomC(r.compte))} · ${dateFr(r.prochaine)} ${echeance(r.prochaine)}`,
-  fmt(r.montant, dev(r.compte)),
-  bTexte('payer', r, 'Payer') + (court ? '' : bNom(r) + bSuppr('supprRec', r)), past(ini(r.nom), 'violet'));
+  r.genre === 'entree' ? `<span class="plus">+${fmt(r.montant, dev(r.compte))}</span>` : fmt(r.montant, dev(r.compte)),
+  bTexte('payer', r, r.genre === 'entree' ? 'Encaisser' : 'Payer') + (court ? '' : bNom(r) + bSuppr('supprRec', r)), past(ini(r.nom), r.genre === 'entree' ? 'plus' : 'violet'));
 
 // Toute la ligne est un bouton : la toucher ouvre l'opération dans le formulaire, où on la modifie ou la supprime.
 const ligneOp = o => {
@@ -440,7 +444,7 @@ const moisTexte = (m, forme) => new Date(m + '-01T00:00:00').toLocaleDateString(
 // Les champs que la fenêtre « Modifier » propose en plus du nom, selon l'élément.
 const ARGENT = ['budget', 'objectif', 'montant'];
 const champsDe = x => d.recurrents.includes(x) ? ['montant', 'periode', 'prochaine']
-  : d.categories.includes(x) ? (x.type === 'sortie' ? ['budget'] : [])
+  : d.categories.includes(x) ? (x.type === 'sortie' ? ['budget', 'budgetPeriode'] : [])
   : x.type === 'evenement' ? ['objectif', 'date'] : x.type === 'emprunt' || x.type === 'pret' ? ['echeance'] : [];
 
 const vues = {
@@ -458,7 +462,10 @@ const vues = {
     d.ops.filter(o => o.date.startsWith(mois) && o.type === 'sortie').forEach(o => parCat[o.categorie] = (parCat[o.categorie] || 0) + enPrincipale(o));
     const cats = d.categories.filter(c => c.type === 'sortie' && (parCat[c.id] || c.budget)).map(c => ({ c, m: parCat[c.id] || 0 })).sort((a, b) => b.m - a.m);
     const maxC = cats[0]?.m || 1;
-    const budgets = cats.filter(x => x.c.budget), budgetReste = budgets.reduce((a, x) => a + x.c.budget - x.m, 0);
+    // Dépenses de la semaine en cours, pour les budgets hebdomadaires.
+    const debSem = lundi(auj()), moisCourant = mois === auj().slice(0, 7), parSem = {};
+    d.ops.filter(o => o.type === 'sortie' && o.date >= debSem && lundi(o.date) === debSem).forEach(o => parSem[o.categorie] = (parSem[o.categorie] || 0) + enPrincipale(o));
+    const budgets = cats.filter(x => x.c.budget && x.c.budgetPeriode !== 'semaine'), budgetReste = budgets.reduce((a, x) => a + x.c.budget - x.m, 0);
     const jSauv = d.sauvegarde ? -jours(d.sauvegarde) : null;
     const rappel = d.ops.length && (jSauv === null || jSauv >= 7)
       ? `<p class="bloc rappel"><span>${jSauv === null ? 'Vos données n’ont jamais été sauvegardées.' : `Dernière sauvegarde il y a ${jSauv} jours.`}</span><button class="sec" data-act="exporter">Sauvegarder</button></p>` : '';
@@ -473,12 +480,13 @@ const vues = {
         fmt(s[e.id] || 0, e.devise) + (e.objectif ? `<small>sur ${fmt(e.objectif, e.devise)}</small>` : ''), bTexte('mettre', e, 'Mettre de côté'), past(ini(e.nom), 'usd'))]),
     ].sort((a, b) => a[0].localeCompare(b[0])).map(x => x[1]);
     const ligneCat = ({ c, m }) => {
-      const b = c.budget, part = b ? m / b : m / maxC;
-      const etat = !b ? '' : m > b ? '<span class="badge retard">Dépassé</span>' : m >= .8 * b ? '<span class="badge">Bientôt atteint</span>' : '';
+      // Un budget hebdomadaire se compare aux dépenses de la semaine en cours ; sur un autre mois, on montre seulement le total.
+      const hebdo = c.budget && c.budgetPeriode === 'semaine', b = hebdo && !moisCourant ? 0 : c.budget, u = hebdo ? parSem[c.id] || 0 : m, part = b ? u / b : m / maxC;
+      const etat = !b ? '' : u > b ? '<span class="badge retard">Dépassé</span>' : u >= .8 * b ? '<span class="badge">Bientôt atteint</span>' : '';
       return `<li class="ligne compact"><div class="txt">${past(ini(c.nom), couleurCat(c.id))}<strong>${esc(c.nom)} ${etat}</strong>
-        <small>${b ? `${fmt(m, d.principale)} sur ${fmt(b, d.principale)}` : `${Math.round(m / (sorties || 1) * 100)} % des dépenses du mois`}</small>
-        <div class="barre${b && m > b ? ' depasse' : ''}" style="--c:var(--${couleurCat(c.id)})"><i style="width:${Math.min(100, Math.round(part * 100))}%"></i></div></div>
-        <div class="droite">${fmt(m, d.principale)}</div><div class="btns">${bIcone('renommer', c, b ? 'Modifier le budget de' : 'Fixer un budget pour', 'nom')}</div></li>`;
+        <small>${b ? `${hebdo ? 'Cette semaine : ' : ''}${fmt(u, d.principale)} sur ${fmt(b, d.principale)}` : `${Math.round(m / (sorties || 1) * 100)} % des dépenses du mois`}</small>
+        <div class="barre${b && u > b ? ' depasse' : ''}" style="--c:var(--${couleurCat(c.id)})"><i style="width:${Math.min(100, Math.round(part * 100))}%"></i></div></div>
+        <div class="droite">${fmt(m, d.principale)}</div><div class="btns">${bIcone('renommer', c, c.budget ? 'Modifier le budget de' : 'Fixer un budget pour', 'nom')}</div></li>`;
     };
     return `
       <div class="tete"><h1>Accueil</h1><a class="btn fab" href="#operations">${ICO.plus}<span>Ajouter une opération</span></a></div>
@@ -509,7 +517,7 @@ const vues = {
       </div>
       <h2>Dépenses par catégorie</h2>
       ${liste(cats.map(ligneCat), 'Aucune dépense ce mois-ci.')}
-      <p class="aide">Le crayon fixe un budget mensuel pour une catégorie, dans la devise des totaux.</p>
+      <p class="aide">Le crayon fixe un budget par mois ou par semaine pour une catégorie, dans la devise des totaux.</p>
       <h2>Répartition</h2>
       <div class="cartes">
         ${carte('Disponible', total(1, 'banque', 'especes', 'mobile'), 'cdf')}
@@ -602,24 +610,25 @@ const vues = {
     const cout = genre => d.recurrents.filter(r => r.genre === genre).reduce((a, r) => a + conv(r.montant, dev(r.compte), d.principale, d.taux) * (parMois[r.periode] || 0), 0);
     return `
       <h1>Récurrents</h1>
-      <p class="aide">Abonnements et dépenses qui reviennent. Le rappel apparaît sur l'accueil 7 jours avant l'échéance ; « Payer » crée la sortie et reporte l'échéance.</p>
+      <p class="aide">Abonnements, dépenses et entrées qui reviennent, comme un loyer ou un salaire. Le rappel apparaît sur l'accueil 7 jours avant l'échéance ; « Payer » ou « Encaisser » crée l'opération et reporte l'échéance.</p>
       <div class="cartes">
         <div class="carte"><span>Abonnements, par mois</span><b>${fmt(Math.round(cout('abonnement')), d.principale)}</b></div>
-        <div class="carte"><span>Autres récurrentes, par mois</span><b>${fmt(Math.round(cout('recurrent')), d.principale)}</b></div>
+        <div class="carte"><span>Autres dépenses, par mois</span><b>${fmt(Math.round(cout('recurrent')), d.principale)}</b></div>
+        <div class="carte"><span>Entrées, par mois</span><b class="plus">${fmt(Math.round(cout('entree')), d.principale)}</b></div>
       </div>
-      <details class="bloc ajout"${!d.recurrents.length ? ' open' : ''}><summary>${ICO.plus}Ajouter un abonnement ou une dépense récurrente</summary>
+      <details class="bloc ajout"${!d.recurrents.length ? ' open' : ''}><summary>${ICO.plus}Ajouter un élément récurrent</summary>
         <form id="fRec" class="bloc">
         <label>Nom <input name="nom" required></label>
         <label>Genre <select name="genre">${options(Object.keys(GENRES), GENRES)}</select></label>
         <label>Montant <input type="number" name="montant" min="0.01" step="0.01" required inputmode="decimal"></label>
-        <label>Payé depuis <select name="compte" required>${optsComptes(...REELS)}</select></label>
+        <label>Compte <select name="compte" required>${optsComptes(...REELS)}</select></label>
         <label>Catégorie <select name="categorie" required>${optsCat('sortie')}</select></label>
         <label>Fréquence <select name="periode">${options(Object.keys(PERIODES), PERIODES)}</select></label>
         <label>Prochaine échéance <input type="date" name="prochaine" required value="${auj()}"></label>
         <button>Ajouter</button>
       </form>
       </details>
-      ${liste([...d.recurrents].sort((a, b) => a.prochaine.localeCompare(b.prochaine)).map(r => ligneRec(r)), 'Aucun abonnement ni dépense récurrente.')}`;
+      ${liste([...d.recurrents].sort((a, b) => a.prochaine.localeCompare(b.prochaine)).map(r => ligneRec(r)), 'Aucun abonnement, dépense ni entrée récurrente.')}`;
   },
 
   parametres() {
@@ -805,7 +814,9 @@ const ajouts = {
   fRec(v) {
     const montant = centimes(v.montant);
     if (!(montant > 0) || !estDate(v.prochaine)) return 'Montant ou date invalide.';
-    if (!cpt(v.compte) || !v.categorie) return 'Il faut un compte et une catégorie de sortie.';
+    const sensCat = v.genre === 'entree' ? 'entree' : 'sortie';
+    if (!cpt(v.compte)) return 'Ajoutez d’abord un compte dans les paramètres.';
+    if (d.categories.find(c => c.id === v.categorie)?.type !== sensCat) return `Choisissez une catégorie ${sensCat === 'entree' ? 'd’entrée' : 'de dépense'} ; ajoutez-en une dans les paramètres s’il n’y en a pas.`;
     d.recurrents.push({ id: id(), nom: v.nom.trim(), genre: v.genre in GENRES ? v.genre : 'recurrent', montant, compte: v.compte, categorie: v.categorie, periode: v.periode in PERIODES ? v.periode : 'mensuel', prochaine: v.prochaine, jour: Number(v.prochaine.slice(8)) });
   },
   fCompte(v) { d.comptes.push({ id: id(), nom: v.nom.trim(), type: REELS.includes(v.type) ? v.type : 'banque', devise: DEVISES.includes(v.devise) ? v.devise : 'CDF' }); },
@@ -848,8 +859,9 @@ const actions = {
   payer(i) {
     const r = d.recurrents.find(x => x.id === i);
     if (!cpt(r.compte) || cpt(r.compte).archive) return 'Le compte de paiement n’existe plus : supprimez ce rappel et recréez-le.';
-    faire(`Payé : ${r.nom}, −${nombre(r.montant)}\u00a0${dev(r.compte)} depuis ${nomC(r.compte)}.`, () => {
-      d.ops.push({ id: id(), date: auj(), type: 'sortie', montant: r.montant, compte: r.compte, categorie: r.categorie, taux: d.taux, note: r.nom });
+    const entree = r.genre === 'entree';
+    faire(`${entree ? 'Encaissé' : 'Payé'} : ${r.nom}, ${entree ? '+' : '−'}${nombre(r.montant)}\u00a0${dev(r.compte)} ${entree ? 'sur' : 'depuis'} ${nomC(r.compte)}.`, () => {
+      d.ops.push({ id: id(), date: auj(), type: entree ? 'entree' : 'sortie', montant: r.montant, compte: r.compte, categorie: r.categorie, taux: d.taux, note: r.nom });
       r.prochaine = suivant(r.prochaine, r.periode, r.jour);
     });
   },
@@ -871,6 +883,7 @@ const actions = {
       const k = l.dataset.c;
       l.hidden = !montre.includes(k);
       f[k].value = l.hidden ? '' : ARGENT.includes(k) ? (cible[k] ? cible[k] / 100 : '') : cible[k] ?? '';
+      if (k === 'budgetPeriode' && cible.budgetPeriode !== 'semaine') f[k].value = 'mois';
     });
     document.getElementById('dlg').showModal();
   },
@@ -917,6 +930,7 @@ document.addEventListener('submit', e => {
         const v = f[k].value;
         if (ARGENT.includes(k)) { const c = centimes(v || 0); if (c > 0) cible[k] = c; else if (k !== 'montant') delete cible[k]; } // un montant vide garde l'ancien
         else if (k === 'periode') { if (v in PERIODES) cible.periode = v; }
+        else if (k === 'budgetPeriode') { if (v === 'semaine') cible.budgetPeriode = 'semaine'; else delete cible.budgetPeriode; }
         else if (estDate(v)) { cible[k] = v; if (k === 'prochaine') cible.jour = Number(v.slice(8)); }
         else if (k !== 'prochaine') cible[k] = '';
       }
@@ -948,6 +962,7 @@ document.addEventListener('change', async e => {
   const t = e.target;
   if (t.name === 'mois' && t.value) { mois = t.value; rendre(); }
   else if (t.form?.id === 'fOp' && ['type', 'compte', 'vers'].includes(t.name)) majForm(t.name === 'type');
+  else if (t.name === 'genre' && t.form?.id === 'fRec') t.form.categorie.innerHTML = optsCat(t.value === 'entree' ? 'entree' : 'sortie'); // les catégories suivent le genre
   else if (t.name === 'import' && t.files[0]) {
     try {
       const x = JSON.parse(await t.files[0].text());
