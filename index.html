@@ -148,9 +148,6 @@
   .jour:not(:first-child), .jour + .ligne { border-top: 1px solid var(--border); }
   .outils { display: flex; gap: var(--s2); flex-wrap: wrap; margin: 0 0 var(--s2); }
   .outils input { flex: 1 1 12rem; background: var(--card); }
-  .debut { margin-bottom: var(--s3); }
-  .debut ol { margin: var(--s2) 0 0; padding-left: 1.25rem; display: grid; gap: var(--s1); }
-  .debut a { display: inline-block; padding: var(--s2) 0; color: var(--accent); font-weight: 600; text-underline-offset: .2em; }
   .net { display: grid; gap: var(--s1); background: var(--hero); color: var(--hero-fg); box-shadow: none; padding: var(--s4) 1.25rem; border-radius: 1.375rem; }
   .net > span, .net > small, .net .deux span { color: var(--hero-muted); font-size: .85rem; }
   .net .moins { color: var(--hero-moins); }
@@ -490,10 +487,6 @@ const vues = {
     };
     return `
       <div class="tete"><h1>Accueil</h1><a class="btn fab" href="#operations">${ICO.plus}<span>Ajouter une opération</span></a></div>
-      ${d.ops.length ? '' : `<section class="bloc debut" aria-label="Pour commencer"><strong>Pour commencer</strong><ol>
-        <li><a href="#parametres">Réglez le taux du dollar et la devise des totaux</a></li>
-        <li><a href="#parametres">Ajoutez vos comptes : banque, mobile money, épargne</a></li>
-        <li><a href="#operations">Saisissez votre première opération</a></li></ol></section>`}
       <section class="bloc net" aria-label="Situation nette">
         <span>Situation nette</span>
         <b class="${net < 0 ? 'moins' : ''}">${fmt(net, d.principale)}</b>
