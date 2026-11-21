@@ -146,6 +146,7 @@
   dialog::backdrop { background: rgba(2, 6, 23, .55); }
   dialog form { display: grid; gap: var(--s3); }
   dialog p { margin: 0; color: var(--muted); }
+  #imgRecu { display: block; max-width: 100%; max-height: 70vh; margin: 0 auto; border-radius: .5rem; }
   dialog .btns { justify-content: flex-end; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -171,6 +172,12 @@
     <div class="btns"><button class="sec" value="annuler" formnovalidate>Annuler</button><button value="ok">Enregistrer</button></div>
   </form>
 </dialog>
+<dialog id="vueRecu" aria-label="Photo du reçu">
+  <form method="dialog">
+    <img id="imgRecu" alt="Photo du reçu">
+    <div class="btns"><button class="sec" value="retirer">Retirer la photo</button><button value="ok">Fermer</button></div>
+  </form>
+</dialog>
 <dialog id="conf" aria-labelledby="confTitre" aria-describedby="confDetail">
   <form method="dialog">
     <strong id="confTitre"></strong>
@@ -189,6 +196,7 @@ const GENRES = { abonnement: 'Abonnement', recurrent: 'Dépense récurrente' };
 const ICO = {
   suppr: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
   nom: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  recu: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6"/></svg>',
 };
 const id = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
@@ -320,7 +328,7 @@ const ligneOp = o => {
     tr ? 'Transfert' : esc(nomCat(o.categorie)),
     `${esc(nomC(o.compte))}${tr ? ' → ' + esc(nomC(o.vers)) : ''}${o.note ? ' · ' + esc(o.note) : ''}`,
     `<span class="${o.type === 'entree' ? 'plus' : tr ? '' : 'moins'}">${o.type === 'entree' ? '+' : tr ? '' : '−'}${fmt(o.montant, dv)}</span>${change ? `<small>→ ${fmt(o.montantVers, dev(o.vers))} · taux ${nf.format(o.taux)}</small>` : ''}`,
-    (cpt(o.compte)?.archive || cpt(o.vers)?.archive ? '' : bIcone('modifier', o, 'Modifier', 'nom')) + bSuppr('supprOp', o));
+    (o.recu ? bIcone('recu', o, 'Voir le reçu de', 'recu') : '') + (cpt(o.compte)?.archive || cpt(o.vers)?.archive ? '' : bIcone('modifier', o, 'Modifier', 'nom')) + bSuppr('supprOp', o));
 };
 // Sans recherche : le mois choisi. Avec recherche : tout l'historique.
 function opsVisibles() {
@@ -440,9 +448,10 @@ const vues = {
         <fieldset><legend id="tCompte">Compte</legend><div class="choix" id="cComptes"></div></fieldset>
         <fieldset id="lVers"><legend>Vers</legend><div class="choix" id="cVers"></div></fieldset>
         <fieldset id="lCat"><legend>Catégorie</legend><div class="choix" id="cCats"></div></fieldset>
-        <details id="plus"><summary>Date et note</summary><div class="deux">
+        <details id="plus"><summary>Date, note et reçu</summary><div class="deux">
           <label>Date <input type="date" name="date" value="${auj()}"></label>
           <label>Note <input name="note"></label>
+          <label>Photo du reçu <input type="file" name="recu" accept="image/*"></label>
         </div></details>
         <div class="btns"><button id="bOp"></button><button type="button" class="sec" id="bAnnuler" data-act="annulerEdition" hidden>Annuler</button></div>
       </form>
@@ -549,7 +558,7 @@ const vues = {
       </form>
       ${liste(d.categories.map(c => ligne(esc(c.nom), SENS[c.type] ?? '', '', bNom(c) + bSuppr('supprCat', c))), 'Aucune catégorie.')}
       <h2>Sauvegarde</h2>
-      <p class="aide">Les données sont enregistrées sur cet appareil uniquement. ${d.sauvegarde ? 'Dernière sauvegarde : ' + dateFr(d.sauvegarde) + '.' : 'Aucune sauvegarde pour l’instant.'}</p>
+      <p class="aide">Les données et les photos de reçus sont enregistrées sur cet appareil uniquement ; la sauvegarde contient les deux. ${d.sauvegarde ? 'Dernière sauvegarde : ' + dateFr(d.sauvegarde) + '.' : 'Aucune sauvegarde pour l’instant.'}</p>
       <form class="bloc">
         <button type="button" data-act="exporter">Sauvegarder mes données</button>
         ${localStorage.getItem(CLE + '-avant') ? '<button type="button" class="sec" data-act="revenir">Revenir aux données d’avant la restauration</button>' : ''}
@@ -606,6 +615,43 @@ function dire(msg, annulable) {
   minuteur = setTimeout(() => t.hidden = true, 8000);
 }
 function sauver() { localStorage.setItem(CLE, JSON.stringify(d)); rendre(); }
+
+// Les photos de reçus sont trop lourdes pour le stockage principal : elles vont dans IndexedDB, une par opération.
+const bd = new Promise((ok, ko) => {
+  const r = indexedDB.open(CLE, 1);
+  r.onupgradeneeded = () => r.result.createObjectStore('recus');
+  r.onsuccess = () => ok(r.result);
+  r.onerror = () => ko(r.error);
+});
+bd.catch(() => {}); // sans IndexedDB, seule la fonction reçus est indisponible
+const recus = (mode, fn) => bd.then(b => new Promise((ok, ko) => {
+  const t = b.transaction('recus', mode), rq = fn(t.objectStore('recus'));
+  t.oncomplete = () => ok(rq?.result);
+  t.onerror = t.onabort = () => ko(t.error);
+}));
+// Réduit la photo à 1 280 px en JPEG : environ 200 Ko au lieu de plusieurs Mo.
+async function reduire(fichier) {
+  const img = await createImageBitmap(fichier), k = Math.min(1, 1280 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+  c.width = Math.round(img.width * k);
+  c.height = Math.round(img.height * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', .7);
+}
+function garderRecu(i, fichier) {
+  return reduire(fichier).then(u => recus('readwrite', st => st.put(u, i))).catch(async () => {
+    const o = d.ops.find(x => x.id === i), deja = await recus('readonly', st => st.get(i)).catch(() => null);
+    if (o && !deja) { delete o.recu; sauver(); }
+    dire('La photo du reçu n’a pas pu être enregistrée. Modifiez l’opération pour réessayer.');
+  });
+}
+const tousLesRecus = () => Promise.all([recus('readonly', st => st.getAllKeys()), recus('readonly', st => st.getAll())]).then(([k, v]) => Object.fromEntries(k.map((x, i) => [x, v[i]])));
+// Au lancement, on retire les photos dont l'opération n'existe plus (ni ici, ni dans la copie d'avant restauration).
+function nettoyerRecus() {
+  let avantRest = { ops: [] };
+  try { avantRest = JSON.parse(localStorage.getItem(CLE + '-avant')) || avantRest; } catch {}
+  const garder = new Set([...d.ops, ...(avantRest.ops || [])].filter(o => o.recu).map(o => o.id));
+  recus('readwrite', st => { const rq = st.getAllKeys(); rq.onsuccess = () => rq.result.filter(k => !garder.has(k)).forEach(k => st.delete(k)); }).catch(() => {});
+}
 // Applique un changement tout de suite et propose de l'annuler, au lieu de demander avant.
 function faire(msg, changement) { avant = JSON.stringify(d); changement(); sauver(); dire(msg, true); }
 // Demande une confirmation pour ce qui ne se rattrape pas d'un geste. Renvoie une promesse de oui ou non.
@@ -626,15 +672,17 @@ const ajouts = {
     const montant = centimes(v.montant), tr = v.type === 'transfert', anc = d.ops.find(o => o.id === edition);
     if (!['sortie', 'entree', 'transfert'].includes(v.type)) return 'Choisissez un type d’opération.';
     if (!(montant > 0)) return 'Saisissez un montant supérieur à zéro.';
-    if (!estDate(v.date)) return 'Choisissez une date dans « Date et note ».';
+    if (!estDate(v.date)) return 'Choisissez une date dans « Date, note et reçu ».';
     if (!cpt(v.compte)) return 'Ajoutez d’abord un compte dans les paramètres.';
     if (tr && (!cpt(v.vers) || v.compte === v.vers)) return 'Choisissez deux comptes différents.';
     if (!tr && !v.categorie) return 'Ajoutez d’abord une catégorie de ce type dans les paramètres.';
     avant = JSON.stringify(d);
     const taux = anc?.taux ?? d.taux; // une opération modifiée garde son taux d'origine
     const o = { id: anc?.id ?? id(), date: v.date, type: v.type, montant, compte: v.compte, taux, note: v.note.trim(),
-      ...(tr ? { vers: v.vers, montantVers: conv(montant, dev(v.compte), dev(v.vers), taux) } : { categorie: v.categorie }) };
+      ...(tr ? { vers: v.vers, montantVers: conv(montant, dev(v.compte), dev(v.vers), taux) } : { categorie: v.categorie }),
+      ...(anc?.recu || v.recu?.size ? { recu: true } : {}) };
     if (anc) d.ops[d.ops.indexOf(anc)] = o; else d.ops.push(o);
+    if (v.recu?.size) garderRecu(o.id, v.recu);
     edition = null;
     mois = v.date.slice(0, 7);
     const texte = (v.type === 'entree' ? '+' : tr ? '' : '−') + nombre(montant) + ' ' + dev(v.compte);
@@ -722,7 +770,30 @@ const actions = {
     // Point-virgule et BOM : c'est ce qu'attend Excel en français.
     telecharger(`operations-${q.trim() ? 'recherche' : mois}.csv`, '\ufeff' + ['Date;Type;Catégorie;Compte;Vers;Montant;Devise;Taux;Note', ...lignes].join('\r\n'), 'text/csv').catch(() => {});
   },
-  exporter() { telecharger('depenses-' + auj() + '.json', JSON.stringify(d, null, 2), 'application/json').then(() => { d.sauvegarde = auj(); sauver(); }, () => {}); },
+  exporter() {
+    const envoyer = contenu => telecharger('depenses-' + auj() + '.json', contenu, 'application/json').then(() => { d.sauvegarde = auj(); sauver(); }, () => {});
+    if (!d.ops.some(o => o.recu)) return void envoyer(JSON.stringify(d, null, 2));
+    // Avec des photos, le fichier se prépare d'abord ; la confirmation donne ensuite le geste que le partage exige sur iPhone.
+    tousLesRecus().catch(() => ({})).then(tous => {
+      const photos = Object.fromEntries(d.ops.filter(o => o.recu && tous[o.id]).map(o => [o.id, tous[o.id]])), contenu = JSON.stringify({ ...d, recus: photos });
+      demander('Sauvegarde prête', `${d.ops.length} opérations et ${Object.keys(photos).length} photos de reçus, ${nf.format(Math.max(.1, Math.round(contenu.length / 1e5) / 10))} Mo.`, 'Enregistrer le fichier').then(ok => ok && envoyer(contenu));
+    });
+  },
+  recu(i) {
+    recus('readonly', st => st.get(i)).catch(() => null).then(u => {
+      if (!u) return dire('La photo de ce reçu n’est pas sur cet appareil.');
+      const g = document.getElementById('vueRecu');
+      document.getElementById('imgRecu').src = u;
+      g.returnValue = '';
+      g.showModal();
+      g.addEventListener('close', () => {
+        if (g.returnValue !== 'retirer') return;
+        const o = d.ops.find(x => x.id === i);
+        recus('readwrite', st => st.delete(i)).catch(() => {});
+        if (o) faire('Photo du reçu retirée.', () => { delete o.recu; }); // Annuler remet le lien ; la photo, elle, est supprimée
+      }, { once: true });
+    });
+  },
 };
 
 document.addEventListener('submit', e => {
@@ -765,13 +836,20 @@ document.addEventListener('change', async e => {
       const dern = x.ops.map(o => o.date).filter(estDate).sort().at(-1);
       const ok = await demander('Restaurer cette sauvegarde ?',
         `Le fichier contient ${x.ops.length} opérations et ${x.comptes.length} comptes${dern ? ', la dernière opération date du ' + dateFr(dern) : ''}. Il remplace vos ${d.ops.length} opérations actuelles, qui restent récupérables dans les paramètres.`, 'Restaurer');
-      if (ok) { localStorage.setItem(CLE + '-avant', JSON.stringify(d)); faire('Sauvegarde restaurée.', () => { d = migrer(x); }); }
+      if (ok) {
+        const photos = x.recus && typeof x.recus === 'object' ? Object.entries(x.recus).filter(([, u]) => typeof u === 'string' && u.startsWith('data:image/')) : [];
+        delete x.recus; // les photos ne vont jamais dans le stockage principal
+        await recus('readwrite', st => photos.forEach(([k, u]) => st.put(u, k))).catch(() => dire('Les photos de reçus n’ont pas pu être restaurées.'));
+        localStorage.setItem(CLE + '-avant', JSON.stringify(d));
+        faire('Sauvegarde restaurée.', () => { d = migrer(x); });
+      }
       else rendre();
     } catch { dire('Ce fichier n’est pas une sauvegarde de l’application. Choisissez un fichier « depenses-….json ».'); }
   }
 });
 addEventListener('hashchange', () => { rendre(); document.querySelector('#fOp [name=montant]')?.focus(); });
 rendre();
+nettoyerRecus();
 navigator.storage?.persist?.(); // demande au navigateur de ne pas effacer les données
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {}); // sans lui l'application marche, mais pas hors ligne
 </script>
