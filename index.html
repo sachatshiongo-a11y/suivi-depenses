@@ -128,6 +128,7 @@
   dialog { border: 1px solid var(--border); border-radius: var(--r); background: var(--card); color: var(--fg); padding: var(--s4); width: min(24rem, calc(100vw - 2rem)); }
   dialog::backdrop { background: rgba(2, 6, 23, .55); }
   dialog form { display: grid; gap: var(--s3); }
+  dialog p { margin: 0; color: var(--muted); }
   dialog .btns { justify-content: flex-end; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -150,6 +151,13 @@
     <strong id="dlgTitre">Renommer</strong>
     <label>Nom <input name="nom" required></label>
     <div class="btns"><button class="sec" value="annuler" formnovalidate>Annuler</button><button value="ok">Enregistrer</button></div>
+  </form>
+</dialog>
+<dialog id="conf" aria-labelledby="confTitre" aria-describedby="confDetail">
+  <form method="dialog">
+    <strong id="confTitre"></strong>
+    <p id="confDetail"></p>
+    <div class="btns"><button class="sec" value="non">Annuler</button><button value="ok"></button></div>
   </form>
 </dialog>
 <script>
@@ -459,6 +467,7 @@ const vues = {
         <button>Ajouter</button>
       </form>
       ${liste(actifs(...REELS).map(c => ligne(esc(c.nom), `${TYPES[c.type]} · ${esc(c.devise)}`, '', bNom(c) + bSuppr('supprCompte', c))), 'Aucun compte.')}
+      ${d.comptes.some(c => c.archive) ? `<h2>Archivés</h2>${liste(d.comptes.filter(c => c.archive).map(c => ligne(esc(c.nom), `${TYPES[c.type]} · ${esc(c.devise)}`, '', bTexte('restaurer', c, 'Restaurer'))))}` : ''}
       <h2>Catégories</h2>
       <form id="fCat" class="bloc">
         <label>Libellé <input name="nom" required></label>
@@ -470,6 +479,7 @@ const vues = {
       <p class="aide">Les données sont enregistrées sur cet appareil uniquement. ${d.sauvegarde ? 'Dernière sauvegarde : ' + dateFr(d.sauvegarde) + '.' : 'Aucune sauvegarde pour l’instant.'}</p>
       <form class="bloc">
         <button type="button" data-act="exporter">Sauvegarder mes données</button>
+        ${localStorage.getItem(CLE + '-avant') ? '<button type="button" class="sec" data-act="revenir">Revenir aux données d’avant la restauration</button>' : ''}
         <label>Restaurer une sauvegarde <input type="file" name="import" accept="application/json,.json"></label>
       </form>`;
   },
@@ -523,6 +533,18 @@ function dire(msg, annulable) {
   minuteur = setTimeout(() => t.hidden = true, 8000);
 }
 function sauver() { localStorage.setItem(CLE, JSON.stringify(d)); rendre(); }
+// Applique un changement tout de suite et propose de l'annuler, au lieu de demander avant.
+function faire(msg, changement) { avant = JSON.stringify(d); changement(); sauver(); dire(msg, true); }
+// Demande une confirmation pour ce qui ne se rattrape pas d'un geste. Renvoie une promesse de oui ou non.
+function demander(titre, detail, verbe) {
+  const g = document.getElementById('conf');
+  document.getElementById('confTitre').textContent = titre;
+  document.getElementById('confDetail').textContent = detail;
+  g.querySelector('[value=ok]').textContent = verbe;
+  g.returnValue = '';
+  g.showModal();
+  return new Promise(r => g.addEventListener('close', () => r(g.returnValue === 'ok'), { once: true }));
+}
 function versOperations(p) { pre = p; location.hash = 'operations'; rendre(); }
 const centimes = v => Math.round(v * 100);
 
@@ -564,9 +586,15 @@ const ajouts = {
   fCompte(v) { d.comptes.push({ id: id(), nom: v.nom.trim(), type: REELS.includes(v.type) ? v.type : 'banque', devise: DEVISES.includes(v.devise) ? v.devise : 'CDF' }); },
   fCat(v) { d.categories.push({ id: id(), nom: v.nom.trim(), type: v.type in SENS ? v.type : 'sortie' }); },
   fTaux(v) {
-    if (!(Number(v.taux) > 0)) return 'Le taux doit être un nombre positif.';
-    d.taux = Number(v.taux);
-    d.principale = DEVISES.includes(v.principale) ? v.principale : 'CDF';
+    const taux = Number(v.taux), anc = d.taux, principale = DEVISES.includes(v.principale) ? v.principale : 'CDF';
+    if (!(taux > 0)) return 'Le taux doit être un nombre supérieur à zéro, par exemple 2800.';
+    const appliquer = () => faire(taux === anc ? 'Réglages enregistrés.' : `Taux enregistré : 1 USD = ${nf.format(taux)} CDF (avant : ${nf.format(anc)}). Il s’applique aux prochaines opérations.`,
+      () => { d.taux = taux; d.principale = principale; });
+    const ecart = Math.round((taux / anc - 1) * 100);
+    // Un écart de plus de 20 % ressemble à une faute de frappe (280 pour 2 800).
+    if (Math.abs(ecart) > 20) demander('Ce taux est très différent', `Le taux passerait de ${nf.format(anc)} à ${nf.format(taux)} CDF pour 1 USD, soit ${ecart > 0 ? '+' : ''}${ecart} %. Tous les totaux convertis changeraient d’autant.`, 'Appliquer ce taux').then(ok => ok ? appliquer() : rendre());
+    else appliquer();
+    return false;
   },
 };
 const actions = {
@@ -575,25 +603,32 @@ const actions = {
   modifier(i) { edition = i; rendre(); scrollTo(0, 0); document.querySelector('#fOp [name=montant]').focus(); },
   annulerEdition() { edition = null; rendre(); },
   supprCompte(i) {
-    if (d.recurrents.some(r => r.compte === i)) return 'Ce compte paie un abonnement ou une dépense récurrente.';
-    if (!d.ops.some(o => o.compte === i || o.vers === i)) {
-      if (confirm('Supprimer « ' + nomC(i) + ' » ?')) { d.comptes = d.comptes.filter(c => c.id !== i); sauver(); }
-    } else if (soldes(d.ops)[i]) return 'Le solde n’est pas à zéro : soldez d’abord par une opération.';
+    const c = cpt(i);
+    if (d.recurrents.some(r => r.compte === i)) return 'Ce compte paie un abonnement ou une dépense récurrente : changez-le ou supprimez ce rappel d’abord.';
+    if (!d.ops.some(o => o.compte === i || o.vers === i)) return faire(`« ${c.nom} » supprimé.`, () => { d.comptes = d.comptes.filter(x => x.id !== i); });
+    if (soldes(d.ops)[i]) return 'Le solde n’est pas à zéro : soldez d’abord par une opération.';
     // On archive au lieu de supprimer pour garder l'historique des opérations.
-    else if (confirm('Archiver « ' + nomC(i) + ' » ? Son historique est conservé.')) { cpt(i).archive = true; sauver(); }
+    faire(`« ${c.nom} » archivé. Son historique est conservé.`, () => { c.archive = true; });
   },
+  restaurer(i) { faire(`« ${nomC(i)} » restauré.`, () => { delete cpt(i).archive; }); },
   supprCat(i) {
-    if (d.ops.some(o => o.categorie === i) || d.recurrents.some(r => r.categorie === i)) return 'Cette catégorie est utilisée.';
-    if (confirm('Supprimer « ' + nomCat(i) + ' » ?')) { d.categories = d.categories.filter(c => c.id !== i); sauver(); }
+    if (d.ops.some(o => o.categorie === i) || d.recurrents.some(r => r.categorie === i)) return 'Cette catégorie est utilisée par des opérations : renommez-la plutôt.';
+    faire(`Catégorie « ${nomCat(i)} » supprimée.`, () => { d.categories = d.categories.filter(c => c.id !== i); });
   },
-  supprRec(i) { if (confirm('Supprimer ce rappel ?')) { d.recurrents = d.recurrents.filter(r => r.id !== i); sauver(); } },
+  supprRec(i) { faire('Rappel supprimé.', () => { d.recurrents = d.recurrents.filter(r => r.id !== i); }); },
   payer(i) {
     const r = d.recurrents.find(x => x.id === i);
-    if (!cpt(r.compte) || cpt(r.compte).archive) return 'Le compte de paiement n’existe plus.';
-    if (!confirm(`Enregistrer le paiement de « ${r.nom} » aujourd’hui ?`)) return;
-    d.ops.push({ id: id(), date: auj(), type: 'sortie', montant: r.montant, compte: r.compte, categorie: r.categorie, taux: d.taux, note: r.nom });
-    r.prochaine = suivant(r.prochaine, r.periode);
-    sauver();
+    if (!cpt(r.compte) || cpt(r.compte).archive) return 'Le compte de paiement n’existe plus : supprimez ce rappel et recréez-le.';
+    faire(`Payé : ${r.nom}, −${nombre(r.montant)}\u00a0${dev(r.compte)} depuis ${nomC(r.compte)}.`, () => {
+      d.ops.push({ id: id(), date: auj(), type: 'sortie', montant: r.montant, compte: r.compte, categorie: r.categorie, taux: d.taux, note: r.nom });
+      r.prochaine = suivant(r.prochaine, r.periode);
+    });
+  },
+  revenir() {
+    let x;
+    try { x = JSON.parse(localStorage.getItem(CLE + '-avant')); } catch {}
+    if (!valide(x)) return 'La copie d’avant la restauration est illisible.';
+    faire('Données d’avant la restauration rétablies.', () => { d = migrer(x); localStorage.removeItem(CLE + '-avant'); });
   },
   mettre(i) { versOperations({ vers: i }); },
   rembourser(i) { versOperations(cpt(i).type === 'emprunt' ? { vers: i } : { compte: i }); },
@@ -623,9 +658,11 @@ document.addEventListener('submit', e => {
     if (e.submitter?.value === 'ok' && cible && f.nom.value.trim()) { cible.nom = f.nom.value.trim(); sauver(); }
     return;
   }
+  if (f.method === 'dialog') return;
   e.preventDefault();
   if (!ajouts[f.id]) return;
   const err = ajouts[f.id](Object.fromEntries(new FormData(f)));
+  if (err === false) return; // le formulaire a enregistré lui-même
   if (err) return dire(err);
   sauver();
   document.querySelector(`#${f.id} input:not([type=radio]), #${f.id} select`)?.focus();
@@ -645,8 +682,12 @@ document.addEventListener('change', async e => {
     try {
       const x = JSON.parse(await t.files[0].text());
       if (!valide(x)) throw 0;
-      if (confirm('Remplacer toutes les données actuelles par ce fichier ?')) { d = migrer(x); sauver(); }
-    } catch { dire('Fichier invalide.'); }
+      const dern = x.ops.map(o => o.date).filter(estDate).sort().at(-1);
+      const ok = await demander('Restaurer cette sauvegarde ?',
+        `Le fichier contient ${x.ops.length} opérations et ${x.comptes.length} comptes${dern ? ', la dernière opération date du ' + dateFr(dern) : ''}. Il remplace vos ${d.ops.length} opérations actuelles, qui restent récupérables dans les paramètres.`, 'Restaurer');
+      if (ok) { localStorage.setItem(CLE + '-avant', JSON.stringify(d)); faire('Sauvegarde restaurée.', () => { d = migrer(x); }); }
+      else rendre();
+    } catch { dire('Ce fichier n’est pas une sauvegarde de l’application. Choisissez un fichier « depenses-….json ».'); }
   }
 });
 addEventListener('hashchange', () => { rendre(); document.querySelector('#fOp [name=montant]')?.focus(); });
