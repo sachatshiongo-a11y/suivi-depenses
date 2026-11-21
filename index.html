@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mes dépenses</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Dépenses">
+<meta name="theme-color" content="#F1F5F9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F172A" media="(prefers-color-scheme: dark)">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #F1F5F9; --card: #FFFFFF; --fg: #0F172A; --muted: #475569; --border: #CBD5E1;
+    --primary: #1E40AF; --on-primary: #FFFFFF; --soft: #DBEAFE;
+    --plus: #047857; --moins: #B91C1C; --nav: rgba(255, 255, 255, .82);
+    --r: .75rem; --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1rem; --s6: 1.5rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0F172A; --card: #192134; --fg: #F8FAFC; --muted: #94A3B8; --border: rgba(255, 255, 255, .16);
+      --primary: #60A5FA; --on-primary: #0B1220; --soft: #1E293B;
+      --plus: #34D399; --moins: #F87171; --nav: rgba(15, 23, 42, .82);
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 1rem/1.5 "Avenir Next", Avenir, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; accent-color: var(--primary); caret-color: var(--primary); }
+  /* Avenir n'existe que sur les appareils Apple ; ailleurs, la police du système prend le relais. */
+  ::selection { background: var(--primary); color: var(--on-primary); }
+  :focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+  svg { width: 1.35rem; height: 1.35rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .skip { position: absolute; left: -999rem; }
+  .skip:focus { left: var(--s2); top: var(--s2); background: var(--card); padding: var(--s2); z-index: 9; }
+
+  header { display: flex; align-items: center; justify-content: space-between; padding: var(--s3) var(--s4); padding-top: calc(var(--s3) + env(safe-area-inset-top)); }
+  .logo { font-weight: 700; font-size: 1.1rem; letter-spacing: -.01em; }
+  nav { position: fixed; inset: auto 0 0 0; z-index: 5; display: flex; background: var(--nav); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom); }
+  nav a { flex: 1; min-height: 3.5rem; display: grid; place-items: center; align-content: center; gap: 2px; font-size: .72rem; color: var(--muted); text-decoration: none; }
+  nav a[aria-current] { color: var(--primary); font-weight: 600; }
+  main { padding: 0 var(--s4) calc(5.5rem + env(safe-area-inset-bottom)); max-width: 62rem; margin: 0 auto; }
+  main:focus { outline: none; }
+  @media (min-width: 56rem) {
+    body { display: grid; grid-template: auto 1fr / 13rem 1fr; min-height: 100vh; }
+    header { grid-column: 1 / -1; border-bottom: 1px solid var(--border); }
+    nav { position: static; flex-direction: column; background: none; backdrop-filter: none; border: 0; padding: var(--s4) var(--s2); gap: var(--s1); }
+    nav a { flex: none; display: flex; justify-content: flex-start; gap: var(--s3); min-height: 2.75rem; padding: 0 var(--s3); border-radius: var(--r); font-size: .95rem; }
+    nav a:hover { background: var(--soft); }
+    nav a[aria-current] { background: var(--soft); }
+    main { width: 100%; padding: var(--s4) var(--s6) var(--s6); }
+  }
+
+  h1 { font-size: 1.5rem; line-height: 1.25; margin: var(--s2) 0 var(--s4); letter-spacing: -.02em; }
+  h2 { font-size: 1.05rem; margin: var(--s6) 0 var(--s2); }
+  p { margin: var(--s2) 0; }
+  small, .aide { color: var(--muted); font-size: .82rem; }
+  .tete { display: flex; align-items: end; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
+
+  .cartes { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: var(--s3); }
+  .carte, .bloc { background: var(--card); border: 1px solid var(--border); border-radius: var(--r); padding: var(--s3) var(--s4); }
+  .carte { display: grid; gap: 2px; }
+  .carte span { color: var(--muted); font-size: .82rem; }
+  .carte b { font-size: 1.2rem; line-height: 1.3; }
+  .n, .carte b, .droite { font-variant-numeric: tabular-nums; }
+  .plus { color: var(--plus); } .moins { color: var(--moins); }
+
+  form.bloc { display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: var(--s3); align-items: end; margin: var(--s3) 0; }
+  label { display: grid; gap: var(--s1); font-size: .85rem; font-weight: 500; }
+  input, select, button, .btn { font: inherit; min-height: 2.75rem; border-radius: .6rem; }
+  input, select { font-size: 1rem; /* 16 px : en dessous, Safari sur iPhone zoome à chaque saisie */ width: 100%; padding: 0 var(--s3); background: var(--bg); color: var(--fg); border: 1px solid var(--border); }
+  input[type=file] { padding: var(--s2); }
+  button, .btn { cursor: pointer; padding: 0 var(--s4); border: 1px solid transparent; background: var(--primary); color: var(--on-primary); font-weight: 600; transition: filter .15s, background .15s; }
+  button:hover { filter: brightness(1.1); }
+  button:active { filter: brightness(.92); }
+  button.sec { background: transparent; color: var(--fg); border-color: var(--border); font-weight: 500; }
+  button.sec:hover, .icone:hover { background: var(--soft); filter: none; }
+  .icone { display: inline-grid; place-items: center; width: 2.75rem; height: 2.75rem; padding: 0; background: transparent; color: var(--muted); border-radius: 50%; }
+  .icone.danger:hover { color: var(--moins); }
+
+  ul.liste { list-style: none; margin: var(--s2) 0; padding: 0; background: var(--card); border: 1px solid var(--border); border-radius: var(--r); }
+  .ligne { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) var(--s2) var(--s2) var(--s4); min-height: 3.5rem; flex-wrap: wrap; }
+  .ligne + .ligne { border-top: 1px solid var(--border); }
+  .txt { flex: 1 1 9rem; min-width: 0; display: grid; }
+  .txt strong { font-weight: 600; overflow-wrap: anywhere; }
+  .droite { text-align: right; font-weight: 600; white-space: nowrap; display: grid; }
+  .droite small { font-weight: 400; }
+  .btns { display: flex; gap: var(--s1); align-items: center; flex-wrap: wrap; }
+  .badge { display: inline-block; font-size: .72rem; font-weight: 600; padding: 0 .5rem; border-radius: 1rem; background: var(--soft); color: var(--fg); vertical-align: middle; white-space: nowrap; }
+  .badge.retard { background: var(--moins); color: var(--card); }
+  .barre { height: .4rem; border-radius: 1rem; background: var(--soft); overflow: hidden; margin-top: var(--s1); }
+  .barre i { display: block; height: 100%; background: var(--primary); border-radius: inherit; }
+  .vide { padding: var(--s4); color: var(--muted); }
+  .rappel { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; margin: 0 0 var(--s3); }
+
+  #toast { position: fixed; left: 50%; bottom: calc(8.5rem + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: var(--s3); width: max-content; max-width: calc(100vw - 2rem); background: var(--fg); color: var(--bg); padding: var(--s2) var(--s2) var(--s2) var(--s4); min-height: 3.25rem; border-radius: var(--r); font-weight: 600; box-shadow: 0 8px 24px rgba(2, 6, 23, .3); }
+  #toast.err { background: var(--moins); color: var(--card); padding-right: var(--s4); }
+  #toast button { background: transparent; color: inherit; border-color: currentColor; }
+
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  form.saisie { grid-template-columns: 1fr; gap: var(--s4); }
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  legend { padding: 0; margin-bottom: var(--s2); font-size: .85rem; font-weight: 500; }
+  .choix { display: flex; flex-wrap: wrap; gap: var(--s2); }
+  .choix label { display: block; position: relative; }
+  .choix input { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; margin: 0; opacity: 0; cursor: pointer; }
+  .choix span { display: grid; place-items: center; min-height: 2.75rem; padding: 0 var(--s4); border: 1px solid var(--border); border-radius: 2rem; font-size: .95rem; font-weight: 500; transition: background .15s, color .15s; }
+  .choix input:checked + span { background: var(--primary); border-color: var(--primary); color: var(--on-primary); font-weight: 600; }
+  .choix input:focus-visible + span { outline: 3px solid var(--primary); outline-offset: 2px; }
+  label.montant { display: flex; align-items: baseline; gap: var(--s2); border-bottom: 2px solid var(--border); }
+  label.montant:focus-within { border-color: var(--primary); }
+  .montant input { flex: 1; min-width: 0; min-height: 3.75rem; padding: 0; border: 0; border-radius: 0; background: none; outline: none; font-size: 2.5rem; font-weight: 700; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+  .montant input::-webkit-inner-spin-button { display: none; }
+  .montant input::placeholder { color: var(--muted); }
+  .montant b { font-size: 1.25rem; color: var(--muted); }
+  summary { cursor: pointer; padding: var(--s3) 0; color: var(--muted); font-size: .9rem; }
+  .deux { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--s3); }
+  #bOp { flex: 1; }
+  .fab { display: inline-grid; place-items: center; text-decoration: none; }
+  @media (max-width: 55.99rem) { .fab { position: fixed; right: var(--s4); bottom: calc(4.5rem + env(safe-area-inset-bottom)); z-index: 6; border-radius: 2rem; box-shadow: 0 6px 18px rgba(2, 6, 23, .35); } }
+  dialog { border: 1px solid var(--border); border-radius: var(--r); background: var(--card); color: var(--fg); padding: var(--s4); width: min(24rem, calc(100vw - 2rem)); }
+  dialog::backdrop { background: rgba(2, 6, 23, .55); }
+  dialog form { display: grid; gap: var(--s3); }
+  dialog .btns { justify-content: flex-end; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+<a class="skip" href="#main">Aller au contenu</a>
+<header>
+  <span class="logo">Mes dépenses</span>
+  <a class="icone" href="#parametres" aria-label="Paramètres" title="Paramètres"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h10M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg></a>
+</header>
+<nav aria-label="Sections">
+  <a href="#tableau"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Accueil</a>
+  <a href="#operations"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3"/></svg>Opérations</a>
+  <a href="#evenements"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>Évènements</a>
+  <a href="#dettes"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/></svg>Dettes</a>
+  <a href="#recurrents"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m17 2 4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3"/></svg>Récurrents</a>
+</nav>
+<main id="main" tabindex="-1"></main>
+<div id="toast" role="status" hidden><span></span><button class="sec" data-act="annuler">Annuler</button></div>
+<dialog id="dlg" aria-labelledby="dlgTitre">
+  <form method="dialog" id="fNom">
+    <strong id="dlgTitre">Renommer</strong>
+    <label>Nom <input name="nom" required></label>
+    <div class="btns"><button class="sec" value="annuler" formnovalidate>Annuler</button><button value="ok">Enregistrer</button></div>
+  </form>
+</dialog>
+<script>
+const CLE = 'suivi-depenses';
+const TYPES = { banque: 'Banque', especes: 'Espèces', mobile: 'Mobile money', epargne: 'Épargne', investissement: 'Investissement', evenement: 'Évènement', emprunt: 'Emprunt', pret: 'Prêt' };
+const REELS = ['banque', 'especes', 'mobile', 'epargne', 'investissement'];
+const SENS = { sortie: 'Sortie', entree: 'Entrée' };
+const DEVISES = ['CDF', 'USD'];
+const PERIODES = { hebdo: 'Chaque semaine', mensuel: 'Chaque mois', annuel: 'Chaque année' };
+const GENRES = { abonnement: 'Abonnement', recurrent: 'Dépense récurrente' };
+const ICO = {
+  suppr: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  nom: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+};
+const id = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');
+const auj = () => new Date().toLocaleDateString('fr-CA'); // AAAA-MM-JJ en heure locale
+const estDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s);
+const valide = x => x && Array.isArray(x.comptes) && Array.isArray(x.categories) && Array.isArray(x.ops);
+const nf = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
+const nf2 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const nombre = c => (c % 100 ? nf2 : nf).format(c / 100); // jamais « 25 500,5 »
+
+// Montants en centimes (entiers). Le taux est le nombre de CDF pour 1 USD.
+const conv = (m, de, vers, taux) => de === vers ? m : Math.round(de === 'USD' ? m * taux : m / taux);
+console.assert(conv(100, 'USD', 'CDF', 2800) === 280000 && conv(280000, 'CDF', 'USD', 2800) === 100 && conv(5, 'CDF', 'CDF', 9) === 5, 'conv() est faux');
+
+function soldes(ops) {
+  const s = {}, add = (c, m) => s[c] = (s[c] || 0) + m;
+  for (const o of ops) {
+    if (o.type === 'entree') add(o.compte, o.montant);
+    else { add(o.compte, -o.montant); if (o.type === 'transfert') add(o.vers, o.montantVers ?? o.montant); }
+  }
+  return s;
+}
+console.assert(JSON.stringify(soldes([
+  { type: 'entree', compte: 'a', montant: 1000 },
+  { type: 'sortie', compte: 'a', montant: 300 },
+  { type: 'transfert', compte: 'a', vers: 'b', montant: 200 },
+  { type: 'transfert', compte: 'a', vers: 'c', montant: 100, montantVers: 280000 },
+])) === '{"a":400,"b":200,"c":280000}', 'soldes() est faux');
+
+// shortcut: une échéance du 31 retombe au 28 puis y reste, à corriger si le jour exact compte.
+function suivant(date, periode) {
+  const t = new Date(date + 'T00:00:00Z');
+  if (periode === 'hebdo') t.setUTCDate(t.getUTCDate() + 7);
+  else {
+    const j = t.getUTCDate();
+    t.setUTCDate(1);
+    t.setUTCMonth(t.getUTCMonth() + (periode === 'annuel' ? 12 : 1));
+    t.setUTCDate(Math.min(j, new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate()));
+  }
+  return t.toISOString().slice(0, 10);
+}
+console.assert(suivant('2026-01-31', 'mensuel') === '2026-02-28' && suivant('2026-12-28', 'hebdo') === '2027-01-04' && suivant('2026-03-15', 'annuel') === '2027-03-15', 'suivant() est faux');
+
+// Met à niveau les données de la première version (une seule devise, pas de taux).
+function migrer(x) {
+  const anc = DEVISES.includes(x.devise) ? x.devise : 'CDF';
+  x.taux ||= 2800;
+  x.principale ||= anc;
+  x.recurrents ||= [];
+  x.comptes.forEach(c => c.devise ||= anc);
+  x.ops.forEach(o => o.taux ||= x.taux); // le taux reste figé sur chaque opération
+  delete x.devise;
+  return x;
+}
+function charger() {
+  let x;
+  try { x = JSON.parse(localStorage.getItem(CLE)); } catch {}
+  const cat = (nom, type) => ({ id: id(), nom, type });
+  if (!valide(x)) x = {
+    comptes: [{ id: id(), nom: 'Espèces', type: 'especes', devise: 'CDF' }],
+    categories: [
+      ...['Alimentation', 'Transport', 'Logement', 'Santé', 'Loisirs', 'Abonnements', 'Autre'].map(n => cat(n, 'sortie')),
+      ...['Salaire', 'Autre'].map(n => cat(n, 'entree')),
+    ],
+    ops: [],
+  };
+  return migrer(x);
+}
+let d = charger(), mois = auj().slice(0, 7), pre = null, cible = null, edition = null, avant = null, minuteur;
+
+const cpt = i => d.comptes.find(c => c.id === i);
+const actifs = (...types) => d.comptes.filter(c => !c.archive && (!types.length || types.includes(c.type)));
+const dev = i => cpt(i)?.devise ?? d.principale;
+const nomC = i => cpt(i)?.nom ?? '(supprimé)';
+const nomCat = i => d.categories.find(c => c.id === i)?.nom ?? '(supprimée)';
+const fmt = (c, dv) => nombre(c) + ' ' + esc(dv);
+const enPrincipale = o => conv(o.montant, dev(o.compte), d.principale, o.taux); // au taux du jour de l'opération
+const jours = date => Math.round((Date.parse(date) - Date.parse(auj())) / 864e5);
+const dateFr = s => estDate(s) ? new Date(s + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+
+const options = (cles, noms) => cles.map(k => `<option value="${esc(k)}">${esc(noms ? noms[k] : k)}</option>`).join('');
+const optsCat = type => d.categories.filter(c => c.type === type).map(c => `<option value="${esc(c.id)}">${esc(c.nom)}</option>`).join('');
+const optsComptes = (...types) => (types.length ? types : Object.keys(TYPES)).map(t => {
+  const l = actifs(t);
+  return l.length ? `<optgroup label="${TYPES[t]}">${l.map(c => `<option value="${esc(c.id)}">${esc(c.nom)} (${esc(c.devise)})</option>`).join('')}</optgroup>` : '';
+}).join('');
+const chips = (name, items, sel) => {
+  const ok = items.some(x => x.v === sel) ? sel : items[0]?.v;
+  return items.map(x => `<label><input type="radio" name="${name}" value="${esc(x.v)}"${x.v === ok ? ' checked' : ''}><span>${esc(x.l)}</span></label>`).join('')
+    || '<small>Rien à choisir : ajoutez-en dans les paramètres.</small>';
+};
+// Dernier compte utilisé en premier, catégorie la plus fréquente en premier.
+function comptesPour(tous) {
+  const rang = {};
+  d.ops.forEach((o, i) => { if (o.type !== 'transfert') rang[o.compte] = i; }); // un transfert ne change pas le compte proposé pour une dépense
+  return actifs(...(tous ? [] : [...REELS, 'evenement'])).sort((a, b) => (rang[b.id] ?? -1) - (rang[a.id] ?? -1)).map(c => ({ v: c.id, l: `${c.nom} · ${c.devise}` }));
+}
+function catsPour(type) {
+  const n = {};
+  d.ops.forEach(o => n[o.categorie] = (n[o.categorie] || 0) + 1);
+  return d.categories.filter(c => c.type === type).sort((a, b) => (n[b.id] || 0) - (n[a.id] || 0)).map(c => ({ v: c.id, l: c.nom }));
+}
+const val = name => document.querySelector(`#fOp [name=${name}]:checked`)?.value;
+const choixMois = () => `<label>Mois <input type="month" name="mois" value="${mois}"></label>`;
+const bIcone = (act, x, verbe, ico, cls = '') => `<button class="icone ${cls}" data-act="${act}" data-id="${esc(x.id)}" aria-label="${verbe} ${esc(x.nom ?? 'l’opération')}" title="${verbe}">${ICO[ico]}</button>`;
+const bSuppr = (act, x) => bIcone(act, x, 'Supprimer', 'suppr', 'danger');
+const bNom = x => bIcone('renommer', x, 'Renommer', 'nom');
+const bTexte = (act, x, texte) => `<button class="sec" data-act="${act}" data-id="${esc(x.id)}">${texte}</button>`;
+const ligne = (titre, sous, droite, boutons = '') => `<li class="ligne"><div class="txt"><strong>${titre}</strong><small>${sous}</small></div><div class="droite">${droite}</div><div class="btns">${boutons}</div></li>`;
+const liste = (lignes, vide) => lignes.length ? `<ul class="liste">${lignes.join('')}</ul>` : `<p class="bloc vide">${vide}</p>`;
+const echeance = date => { const j = jours(date); return j < 0 ? `<span class="badge retard">En retard de ${-j} j</span>` : `<span class="badge">${j ? 'Dans ' + j + ' j' : 'Aujourd’hui'}</span>`; };
+
+function carte(titre, p, cls = '') {
+  const autre = DEVISES.find(x => x !== d.principale);
+  const tot = p[d.principale] + conv(p[autre], autre, d.principale, d.taux);
+  return `<div class="carte"><span>${titre}</span><b class="${cls}">${fmt(tot, d.principale)}</b>${p[autre] ? `<small>${fmt(p.CDF, 'CDF')} + ${fmt(p.USD, 'USD')}</small>` : ''}</div>`;
+}
+const ligneRec = r => ligne(
+  `${esc(r.nom)} <span class="badge">${GENRES[r.genre] ?? ''}</span>`,
+  `${PERIODES[r.periode] ?? ''} · ${esc(nomC(r.compte))} · ${dateFr(r.prochaine)} ${echeance(r.prochaine)}`,
+  fmt(r.montant, dev(r.compte)),
+  bTexte('payer', r, 'Payer') + bNom(r) + bSuppr('supprRec', r));
+
+const vues = {
+  tableau() {
+    const s = soldes(d.ops);
+    const total = (signe, ...types) => { const p = { CDF: 0, USD: 0 }; actifs(...types).forEach(c => p[c.devise] += signe * (s[c.id] || 0)); return p; };
+    const duMois = d.ops.filter(o => o.date.startsWith(mois));
+    const tot = t => duMois.filter(o => o.type === t).reduce((a, o) => a + enPrincipale(o), 0);
+    const parCat = {};
+    duMois.filter(o => o.type === 'sortie').forEach(o => parCat[o.categorie] = (parCat[o.categorie] || 0) + enPrincipale(o));
+    const cats = Object.entries(parCat).sort((a, b) => b[1] - a[1]), max = cats[0]?.[1] || 1;
+    const jSauv = d.sauvegarde ? -jours(d.sauvegarde) : null;
+    const rappel = d.ops.length && (jSauv === null || jSauv >= 7)
+      ? `<p class="bloc rappel"><span>${jSauv === null ? 'Vos données n’ont jamais été sauvegardées.' : `Dernière sauvegarde il y a ${jSauv} jours.`}</span><button class="sec" data-act="exporter">Sauvegarder</button></p>` : '';
+    const aVenir = d.recurrents.filter(r => jours(r.prochaine) <= 7).sort((a, b) => a.prochaine.localeCompare(b.prochaine));
+    return `
+      <div class="tete"><h1>Tableau de bord</h1><a class="btn fab" href="#operations">Ajouter une opération</a></div>
+      ${rappel}
+      <div class="cartes">
+        ${carte('Disponible', total(1, 'banque', 'especes', 'mobile'))}
+        ${carte('Épargne', total(1, 'epargne'))}
+        ${carte('Investissement', total(1, 'investissement'))}
+        ${carte('Mis de côté', total(1, 'evenement'))}
+        ${carte('Je dois', total(-1, 'emprunt'), 'moins')}
+        ${carte('On me doit', total(1, 'pret'))}
+      </div>
+      <p class="aide">Totaux convertis au taux actuel (1 USD = ${nf.format(d.taux)} CDF). Chaque opération garde le taux du jour où elle a été saisie.</p>
+      ${aVenir.length ? `<h2>À payer dans les 7 jours</h2>${liste(aVenir.map(ligneRec))}` : ''}
+      <div class="tete"><h2>Mois</h2>${choixMois()}</div>
+      <div class="cartes">
+        <div class="carte"><span>Entrées</span><b class="plus">${fmt(tot('entree'), d.principale)}</b></div>
+        <div class="carte"><span>Sorties</span><b class="moins">${fmt(tot('sortie'), d.principale)}</b></div>
+        <div class="carte"><span>Reste du mois</span><b>${fmt(tot('entree') - tot('sortie'), d.principale)}</b></div>
+      </div>
+      <h2>Dépenses par catégorie</h2>
+      ${liste(cats.map(([c, m]) => `<li class="ligne"><div class="txt"><strong>${esc(nomCat(c))}</strong><div class="barre"><i style="width:${Math.round(m / max * 100)}%"></i></div></div><div class="droite">${fmt(m, d.principale)}</div></li>`), 'Aucune dépense ce mois-ci.')}
+      <h2>Comptes</h2>
+      ${liste(actifs(...REELS).map(c => ligne(esc(c.nom), TYPES[c.type], fmt(s[c.id] || 0, c.devise))), 'Aucun compte. Ajoutez-en dans les paramètres.')}`;
+  },
+
+  operations() {
+    const ops = d.ops.filter(o => o.date.startsWith(mois)).sort((a, b) => b.date.localeCompare(a.date));
+    return `
+      <h1>Opérations</h1>
+      <form id="fOp" class="bloc saisie">
+        <fieldset><legend class="sr">Type d'opération</legend><div class="choix">${chips('type', [{ v: 'sortie', l: 'Dépense' }, { v: 'entree', l: 'Entrée' }, { v: 'transfert', l: 'Transfert' }], 'sortie')}</div></fieldset>
+        <label class="montant"><span class="sr">Montant</span><input type="number" name="montant" min="0.01" step="0.01" required inputmode="decimal" placeholder="0" aria-describedby="recu"><b id="dMontant"></b></label>
+        <small id="recu" hidden></small>
+        <fieldset><legend id="tCompte">Compte</legend><div class="choix" id="cComptes"></div></fieldset>
+        <fieldset id="lVers"><legend>Vers</legend><div class="choix" id="cVers"></div></fieldset>
+        <fieldset id="lCat"><legend>Catégorie</legend><div class="choix" id="cCats"></div></fieldset>
+        <details id="plus"><summary>Date et note</summary><div class="deux">
+          <label>Date <input type="date" name="date" value="${auj()}"></label>
+          <label>Note <input name="note"></label>
+        </div></details>
+        <div class="btns"><button id="bOp"></button><button type="button" class="sec" id="bAnnuler" data-act="annulerEdition" hidden>Annuler</button></div>
+      </form>
+      <div class="tete"><h2>Historique</h2>${choixMois()}</div>
+      ${liste(ops.map(o => {
+        const tr = o.type === 'transfert', dv = dev(o.compte), change = tr && dev(o.vers) !== dv;
+        return ligne(
+          tr ? 'Transfert' : esc(nomCat(o.categorie)),
+          `${dateFr(o.date)} · ${esc(nomC(o.compte))}${tr ? ' → ' + esc(nomC(o.vers)) : ''}${o.note ? ' · ' + esc(o.note) : ''}`,
+          `<span class="${o.type === 'entree' ? 'plus' : tr ? '' : 'moins'}">${o.type === 'entree' ? '+' : tr ? '' : '−'}${fmt(o.montant, dv)}</span>${change ? `<small>→ ${fmt(o.montantVers, dev(o.vers))} · taux ${nf.format(o.taux)}</small>` : ''}`,
+          (cpt(o.compte)?.archive || cpt(o.vers)?.archive ? '' : bIcone('modifier', o, 'Modifier', 'nom')) + bSuppr('supprOp', o));
+      }), 'Aucune opération ce mois-ci.')}`;
+  },
+
+  evenements() {
+    const s = soldes(d.ops);
+    return `
+      <h1>Évènements</h1>
+      <p class="aide">Un évènement est une enveloppe : on y met de l'argent de côté par transfert, et on paie ses dépenses depuis elle.</p>
+      <form id="fEvt" class="bloc">
+        <label>Nom de l'évènement <input name="nom" required></label>
+        <label>Devise <select name="devise">${options(DEVISES)}</select></label>
+        <label>Objectif (facultatif) <input type="number" name="objectif" min="0" step="0.01" inputmode="decimal"></label>
+        <label>Date (facultative) <input type="date" name="date"></label>
+        <button>Créer</button>
+      </form>
+      ${liste(actifs('evenement').map(e => {
+        const v = s[e.id] || 0;
+        return `<li class="ligne"><div class="txt"><strong>${esc(e.nom)}</strong><small>${dateFr(e.date)}</small>
+          ${e.objectif ? `<div class="barre" role="progressbar" aria-label="Progression de ${esc(e.nom)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, Math.max(0, Math.round(v / e.objectif * 100)))}"><i style="width:${Math.min(100, Math.max(0, v / e.objectif * 100))}%"></i></div>` : ''}</div>
+          <div class="droite">${fmt(v, e.devise)}${e.objectif ? `<small>sur ${fmt(e.objectif, e.devise)}</small>` : ''}</div>
+          <div class="btns">${bTexte('mettre', e, 'Mettre de côté')}${bNom(e)}${bSuppr('supprCompte', e)}</div></li>`;
+      }), 'Aucun évènement.')}`;
+  },
+
+  dettes() {
+    const s = soldes(d.ops);
+    const bloc = (type, signe, vide) => liste(actifs(type).map(c => ligne(
+      esc(c.nom),
+      c.echeance ? `Échéance ${dateFr(c.echeance)} ${signe * (s[c.id] || 0) > 0 ? echeance(c.echeance) : ''}` : '',
+      signe * (s[c.id] || 0) > 0 ? fmt(signe * (s[c.id] || 0), c.devise) : '<span class="badge">Soldé</span>',
+      bTexte('rembourser', c, 'Rembourser') + bNom(c) + bSuppr('supprCompte', c))), vide);
+    return `
+      <h1>Emprunts et prêts</h1>
+      <form id="fDette" class="bloc">
+        <label>Sens <select name="sens"><option value="emprunt">J'ai emprunté</option><option value="pret">J'ai prêté</option></select></label>
+        <label>Personne ou organisme <input name="nom" required></label>
+        <label>Montant <input type="number" name="montant" min="0.01" step="0.01" required inputmode="decimal"></label>
+        <label>Compte concerné <select name="compte" required>${optsComptes(...REELS)}</select></label>
+        <label>Date <input type="date" name="date" required value="${auj()}"></label>
+        <label>Échéance (facultative) <input type="date" name="echeance"></label>
+        <button>Enregistrer</button>
+      </form>
+      <p class="aide">Le montant est dans la devise du compte choisi. Il entre sur ce compte pour un emprunt et en sort pour un prêt.</p>
+      <h2>Ce que je dois</h2>${bloc('emprunt', -1, 'Aucun emprunt.')}
+      <h2>Ce qu'on me doit</h2>${bloc('pret', 1, 'Aucun prêt.')}`;
+  },
+
+  recurrents() {
+    const parMois = { hebdo: 52 / 12, mensuel: 1, annuel: 1 / 12 };
+    const cout = genre => d.recurrents.filter(r => r.genre === genre).reduce((a, r) => a + conv(r.montant, dev(r.compte), d.principale, d.taux) * (parMois[r.periode] || 0), 0);
+    return `
+      <h1>Abonnements et dépenses récurrentes</h1>
+      <div class="cartes">
+        <div class="carte"><span>Abonnements, par mois</span><b>${fmt(Math.round(cout('abonnement')), d.principale)}</b></div>
+        <div class="carte"><span>Autres récurrentes, par mois</span><b>${fmt(Math.round(cout('recurrent')), d.principale)}</b></div>
+      </div>
+      <form id="fRec" class="bloc">
+        <label>Nom <input name="nom" required></label>
+        <label>Genre <select name="genre">${options(Object.keys(GENRES), GENRES)}</select></label>
+        <label>Montant <input type="number" name="montant" min="0.01" step="0.01" required inputmode="decimal"></label>
+        <label>Payé depuis <select name="compte" required>${optsComptes(...REELS)}</select></label>
+        <label>Catégorie <select name="categorie" required>${optsCat('sortie')}</select></label>
+        <label>Fréquence <select name="periode">${options(Object.keys(PERIODES), PERIODES)}</select></label>
+        <label>Prochaine échéance <input type="date" name="prochaine" required value="${auj()}"></label>
+        <button>Ajouter</button>
+      </form>
+      <p class="aide">Le rappel apparaît sur le tableau de bord 7 jours avant l'échéance. « Payer » crée la sortie et reporte l'échéance.</p>
+      ${liste([...d.recurrents].sort((a, b) => a.prochaine.localeCompare(b.prochaine)).map(ligneRec), 'Aucun abonnement ni dépense récurrente.')}`;
+  },
+
+  parametres() {
+    return `
+      <h1>Paramètres</h1>
+      <h2>Devises et taux</h2>
+      <form id="fTaux" class="bloc">
+        <label>1 USD vaut (en CDF) <input type="number" name="taux" min="1" step="any" required inputmode="decimal" value="${esc(d.taux)}"></label>
+        <label>Devise des totaux <select name="principale">${options(DEVISES)}</select></label>
+        <button>Enregistrer</button>
+      </form>
+      <p class="aide">Un nouveau taux ne s'applique qu'aux opérations saisies ensuite. Les opérations déjà saisies gardent leur taux.</p>
+      <h2>Comptes</h2>
+      <form id="fCompte" class="bloc">
+        <label>Nom <input name="nom" required></label>
+        <label>Type <select name="type">${options(REELS, TYPES)}</select></label>
+        <label>Devise <select name="devise">${options(DEVISES)}</select></label>
+        <button>Ajouter</button>
+      </form>
+      ${liste(actifs(...REELS).map(c => ligne(esc(c.nom), `${TYPES[c.type]} · ${esc(c.devise)}`, '', bNom(c) + bSuppr('supprCompte', c))), 'Aucun compte.')}
+      <h2>Catégories</h2>
+      <form id="fCat" class="bloc">
+        <label>Libellé <input name="nom" required></label>
+        <label>Type <select name="type">${options(Object.keys(SENS), SENS)}</select></label>
+        <button>Ajouter</button>
+      </form>
+      ${liste(d.categories.map(c => ligne(esc(c.nom), SENS[c.type] ?? '', '', bNom(c) + bSuppr('supprCat', c))), 'Aucune catégorie.')}
+      <h2>Sauvegarde</h2>
+      <p class="aide">Les données sont enregistrées sur cet appareil uniquement. ${d.sauvegarde ? 'Dernière sauvegarde : ' + dateFr(d.sauvegarde) + '.' : 'Aucune sauvegarde pour l’instant.'}</p>
+      <form class="bloc">
+        <button type="button" data-act="exporter">Sauvegarder mes données</button>
+        <label>Restaurer une sauvegarde <input type="file" name="import" accept="application/json,.json"></label>
+      </form>`;
+  },
+};
+
+function majForm(refaire) {
+  const type = val('type'), tr = type === 'transfert', recu = document.getElementById('recu');
+  if (refaire) {
+    const o = d.ops.find(x => x.id === edition) || pre || {};
+    document.getElementById('cComptes').innerHTML = chips('compte', comptesPour(tr), o.compte);
+    document.getElementById('cVers').innerHTML = chips('vers', comptesPour(true), o.vers);
+    document.getElementById('cCats').innerHTML = chips('categorie', catsPour(type), o.categorie);
+  }
+  if (tr && val('vers') === val('compte')) { const autre = document.querySelector(`#cVers input:not([value="${val('compte')}"])`); if (autre) autre.checked = true; }
+  const f = document.getElementById('fOp'), dv = dev(val('compte')), dvVers = dev(val('vers'));
+  document.getElementById('lVers').hidden = !tr;
+  document.getElementById('lCat').hidden = tr;
+  document.getElementById('tCompte').textContent = tr ? 'Depuis' : 'Compte';
+  document.getElementById('dMontant').textContent = dv;
+  document.getElementById('bOp').textContent = edition ? 'Enregistrer la modification' : { sortie: 'Ajouter la dépense', entree: 'Ajouter l’entrée', transfert: 'Ajouter le transfert' }[type];
+  recu.hidden = !(tr && dvVers !== dv && f.montant.value > 0);
+  if (!recu.hidden) recu.innerHTML = `Montant reçu : ${fmt(conv(Math.round(f.montant.value * 100), dv, dvVers, d.taux), dvVers)} au taux actuel (1 USD = ${nf.format(d.taux)} CDF).`;
+}
+function rendre() {
+  const vue = vues[location.hash.slice(1)] ? location.hash.slice(1) : 'tableau';
+  if (vue !== 'operations') edition = null;
+  document.querySelectorAll('nav a, header a').forEach(a => a.getAttribute('href') === '#' + vue ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+  document.getElementById('main').innerHTML = vues[vue]();
+  if (vue === 'parametres') document.querySelector('#fTaux [name=principale]').value = d.principale;
+  if (vue === 'operations') {
+    const f = document.getElementById('fOp'), o = d.ops.find(x => x.id === edition);
+    const type = o ? o.type : pre ? 'transfert' : 'sortie';
+    f.querySelector(`[name=type][value=${type}]`).checked = true;
+    if (o) {
+      f.montant.value = o.montant / 100; f.date.value = o.date; f.note.value = o.note ?? '';
+      document.getElementById('plus').open = true;
+      document.getElementById('bAnnuler').hidden = false;
+    }
+    majForm(true);
+    pre = null;
+  }
+}
+function dire(msg, annulable) {
+  const t = document.getElementById('toast');
+  t.firstElementChild.textContent = msg;
+  t.lastElementChild.hidden = !annulable;
+  t.classList.toggle('err', !annulable);
+  t.setAttribute('role', annulable ? 'status' : 'alert');
+  t.hidden = false;
+  clearTimeout(minuteur);
+  minuteur = setTimeout(() => t.hidden = true, 8000);
+}
+function sauver() { localStorage.setItem(CLE, JSON.stringify(d)); rendre(); }
+function versOperations(p) { pre = p; location.hash = 'operations'; rendre(); }
+const centimes = v => Math.round(v * 100);
+
+const ajouts = {
+  fOp(v) {
+    const montant = centimes(v.montant), tr = v.type === 'transfert', anc = d.ops.find(o => o.id === edition);
+    if (!['sortie', 'entree', 'transfert'].includes(v.type)) return 'Choisissez un type d’opération.';
+    if (!(montant > 0)) return 'Saisissez un montant supérieur à zéro.';
+    if (!estDate(v.date)) return 'Choisissez une date dans « Date et note ».';
+    if (!cpt(v.compte)) return 'Ajoutez d’abord un compte dans les paramètres.';
+    if (tr && (!cpt(v.vers) || v.compte === v.vers)) return 'Choisissez deux comptes différents.';
+    if (!tr && !v.categorie) return 'Ajoutez d’abord une catégorie de ce type dans les paramètres.';
+    avant = JSON.stringify(d);
+    const taux = anc?.taux ?? d.taux; // une opération modifiée garde son taux d'origine
+    const o = { id: anc?.id ?? id(), date: v.date, type: v.type, montant, compte: v.compte, taux, note: v.note.trim(),
+      ...(tr ? { vers: v.vers, montantVers: conv(montant, dev(v.compte), dev(v.vers), taux) } : { categorie: v.categorie }) };
+    if (anc) d.ops[d.ops.indexOf(anc)] = o; else d.ops.push(o);
+    edition = null;
+    mois = v.date.slice(0, 7);
+    const texte = (v.type === 'entree' ? '+' : tr ? '' : '−') + nombre(montant) + ' ' + dev(v.compte);
+    dire(`${anc ? 'Modifié' : 'Enregistré'} : ${texte} · ${tr ? nomC(v.compte) + ' → ' + nomC(v.vers) : nomCat(v.categorie) + ' · ' + nomC(v.compte)}`, true);
+  },
+  fEvt(v) { d.comptes.push({ id: id(), nom: v.nom.trim(), type: 'evenement', devise: DEVISES.includes(v.devise) ? v.devise : 'CDF', objectif: centimes(v.objectif || 0), date: v.date }); },
+  fDette(v) {
+    const montant = centimes(v.montant), c = { id: id(), nom: v.nom.trim(), type: v.sens === 'pret' ? 'pret' : 'emprunt', devise: dev(v.compte), echeance: v.echeance };
+    if (!(montant > 0) || !estDate(v.date)) return 'Montant ou date invalide.';
+    if (!cpt(v.compte)) return 'Ajoutez d’abord un compte dans les paramètres.';
+    d.comptes.push(c);
+    // Un emprunt fait entrer l'argent sur le compte ; un prêt l'en fait sortir.
+    const [de, vers] = c.type === 'emprunt' ? [c.id, v.compte] : [v.compte, c.id];
+    d.ops.push({ id: id(), date: v.date, type: 'transfert', montant, montantVers: montant, compte: de, vers, taux: d.taux, note: c.type === 'emprunt' ? 'Emprunt' : 'Prêt' });
+  },
+  fRec(v) {
+    const montant = centimes(v.montant);
+    if (!(montant > 0) || !estDate(v.prochaine)) return 'Montant ou date invalide.';
+    if (!cpt(v.compte) || !v.categorie) return 'Il faut un compte et une catégorie de sortie.';
+    d.recurrents.push({ id: id(), nom: v.nom.trim(), genre: v.genre in GENRES ? v.genre : 'recurrent', montant, compte: v.compte, categorie: v.categorie, periode: v.periode in PERIODES ? v.periode : 'mensuel', prochaine: v.prochaine });
+  },
+  fCompte(v) { d.comptes.push({ id: id(), nom: v.nom.trim(), type: REELS.includes(v.type) ? v.type : 'banque', devise: DEVISES.includes(v.devise) ? v.devise : 'CDF' }); },
+  fCat(v) { d.categories.push({ id: id(), nom: v.nom.trim(), type: v.type in SENS ? v.type : 'sortie' }); },
+  fTaux(v) {
+    if (!(Number(v.taux) > 0)) return 'Le taux doit être un nombre positif.';
+    d.taux = Number(v.taux);
+    d.principale = DEVISES.includes(v.principale) ? v.principale : 'CDF';
+  },
+};
+const actions = {
+  supprOp(i) { avant = JSON.stringify(d); d.ops = d.ops.filter(o => o.id !== i); if (edition === i) edition = null; sauver(); dire('Opération supprimée.', true); },
+  annuler() { if (!avant) return; d = JSON.parse(avant); avant = null; edition = null; document.getElementById('toast').hidden = true; sauver(); },
+  modifier(i) { edition = i; rendre(); scrollTo(0, 0); document.querySelector('#fOp [name=montant]').focus(); },
+  annulerEdition() { edition = null; rendre(); },
+  supprCompte(i) {
+    if (d.recurrents.some(r => r.compte === i)) return 'Ce compte paie un abonnement ou une dépense récurrente.';
+    if (!d.ops.some(o => o.compte === i || o.vers === i)) {
+      if (confirm('Supprimer « ' + nomC(i) + ' » ?')) { d.comptes = d.comptes.filter(c => c.id !== i); sauver(); }
+    } else if (soldes(d.ops)[i]) return 'Le solde n’est pas à zéro : soldez d’abord par une opération.';
+    // On archive au lieu de supprimer pour garder l'historique des opérations.
+    else if (confirm('Archiver « ' + nomC(i) + ' » ? Son historique est conservé.')) { cpt(i).archive = true; sauver(); }
+  },
+  supprCat(i) {
+    if (d.ops.some(o => o.categorie === i) || d.recurrents.some(r => r.categorie === i)) return 'Cette catégorie est utilisée.';
+    if (confirm('Supprimer « ' + nomCat(i) + ' » ?')) { d.categories = d.categories.filter(c => c.id !== i); sauver(); }
+  },
+  supprRec(i) { if (confirm('Supprimer ce rappel ?')) { d.recurrents = d.recurrents.filter(r => r.id !== i); sauver(); } },
+  payer(i) {
+    const r = d.recurrents.find(x => x.id === i);
+    if (!cpt(r.compte) || cpt(r.compte).archive) return 'Le compte de paiement n’existe plus.';
+    if (!confirm(`Enregistrer le paiement de « ${r.nom} » aujourd’hui ?`)) return;
+    d.ops.push({ id: id(), date: auj(), type: 'sortie', montant: r.montant, compte: r.compte, categorie: r.categorie, taux: d.taux, note: r.nom });
+    r.prochaine = suivant(r.prochaine, r.periode);
+    sauver();
+  },
+  mettre(i) { versOperations({ vers: i }); },
+  rembourser(i) { versOperations(cpt(i).type === 'emprunt' ? { vers: i } : { compte: i }); },
+  renommer(i) {
+    cible = [...d.comptes, ...d.categories, ...d.recurrents].find(x => x.id === i);
+    document.querySelector('#fNom [name=nom]').value = cible.nom;
+    document.getElementById('dlg').showModal();
+  },
+  exporter() {
+    const nom = 'depenses-' + auj() + '.json', fichier = new File([JSON.stringify(d, null, 2)], nom, { type: 'application/json' });
+    const fait = () => { d.sauvegarde = auj(); sauver(); };
+    // Sur téléphone, la feuille de partage permet d'enregistrer dans Fichiers ou iCloud.
+    if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [fichier] })) navigator.share({ files: [fichier] }).then(fait, () => {});
+    else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(fichier);
+      a.download = nom;
+      a.click();
+      fait();
+    }
+  },
+};
+
+document.addEventListener('submit', e => {
+  const f = e.target;
+  if (f.id === 'fNom') { // method="dialog" : le navigateur ferme la fenêtre
+    if (e.submitter?.value === 'ok' && cible && f.nom.value.trim()) { cible.nom = f.nom.value.trim(); sauver(); }
+    return;
+  }
+  e.preventDefault();
+  if (!ajouts[f.id]) return;
+  const err = ajouts[f.id](Object.fromEntries(new FormData(f)));
+  if (err) return dire(err);
+  sauver();
+  document.querySelector(`#${f.id} input:not([type=radio]), #${f.id} select`)?.focus();
+});
+document.addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  const err = actions[b.dataset.act](b.dataset.id);
+  if (err) dire(err);
+});
+document.addEventListener('input', e => { if (e.target.name === 'montant' && e.target.form.id === 'fOp') majForm(); });
+document.addEventListener('change', async e => {
+  const t = e.target;
+  if (t.name === 'mois' && t.value) { mois = t.value; rendre(); }
+  else if (t.form?.id === 'fOp' && ['type', 'compte', 'vers'].includes(t.name)) majForm(t.name === 'type');
+  else if (t.name === 'import' && t.files[0]) {
+    try {
+      const x = JSON.parse(await t.files[0].text());
+      if (!valide(x)) throw 0;
+      if (confirm('Remplacer toutes les données actuelles par ce fichier ?')) { d = migrer(x); sauver(); }
+    } catch { dire('Fichier invalide.'); }
+  }
+});
+addEventListener('hashchange', () => { rendre(); document.querySelector('#fOp [name=montant]')?.focus(); });
+rendre();
+navigator.storage?.persist?.(); // demande au navigateur de ne pas effacer les données
+if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {}); // sans lui l'application marche, mais pas hors ligne
+</script>
+</html>
