@@ -92,6 +92,23 @@
   .barre { height: .4rem; border-radius: 1rem; background: var(--soft); overflow: hidden; margin-top: var(--s1); }
   .barre i { display: block; height: 100%; background: var(--primary); border-radius: inherit; }
   .vide { padding: var(--s4); color: var(--muted); }
+  ::placeholder { color: var(--muted); opacity: 1; }
+  .graph { display: grid; grid-template-columns: repeat(6, 1fr); gap: var(--s1); background: var(--card); border: 1px solid var(--border); border-radius: var(--r); padding: var(--s3) var(--s2) var(--s2); }
+  .col { display: grid; gap: var(--s1); justify-items: center; min-height: 0; padding: var(--s2) 0; background: none; color: var(--fg); border: 0; border-radius: .5rem; font-weight: 500; }
+  .col[aria-pressed=true] { background: var(--soft); font-weight: 700; }
+  .paire { display: flex; align-items: flex-end; justify-content: center; gap: 3px; width: 100%; height: 6rem; }
+  .paire i { width: 36%; max-width: 1.25rem; min-height: 2px; border-radius: 3px 3px 0 0; }
+  i.e, .legende .e { background: var(--plus); }
+  i.s, .legende .s { background: var(--moins); }
+  .legende { display: flex; align-items: center; gap: var(--s2); margin: var(--s2) 0 var(--s3); font-size: .82rem; color: var(--muted); }
+  .legende span { width: .7rem; height: .7rem; border-radius: 2px; }
+  .legende .s { margin-left: var(--s3); }
+  .barre.depasse i { background: var(--moins); }
+  .jour { display: flex; justify-content: space-between; gap: var(--s3); padding: var(--s2) var(--s4); font-size: .82rem; font-weight: 600; color: var(--muted); background: var(--bg); }
+  .jour:first-child { border-radius: var(--r) var(--r) 0 0; }
+  .jour:not(:first-child), .jour + .ligne { border-top: 1px solid var(--border); }
+  .outils { display: flex; gap: var(--s2); flex-wrap: wrap; margin: var(--s2) 0; }
+  .outils input { flex: 1 1 12rem; background: var(--card); }
   .net { display: grid; gap: var(--s1); }
   .net > span, .net .deux span { color: var(--muted); font-size: .85rem; }
   .net > b { font-size: 2rem; line-height: 1.2; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
@@ -148,8 +165,9 @@
 <div id="toast" role="status" hidden><span></span><button class="sec" data-act="annuler">Annuler</button></div>
 <dialog id="dlg" aria-labelledby="dlgTitre">
   <form method="dialog" id="fNom">
-    <strong id="dlgTitre">Renommer</strong>
+    <strong id="dlgTitre">Modifier</strong>
     <label>Nom <input name="nom" required></label>
+    <label id="lBudget" hidden><span>Budget mensuel (<span id="dBudget"></span>), vide pour aucun</span><input type="number" name="budget" min="0" step="0.01" inputmode="decimal"></label>
     <div class="btns"><button class="sec" value="annuler" formnovalidate>Annuler</button><button value="ok">Enregistrer</button></div>
   </form>
 </dialog>
@@ -239,7 +257,7 @@ function charger() {
   };
   return migrer(x);
 }
-let d = charger(), mois = auj().slice(0, 7), pre = null, cible = null, edition = null, avant = null, minuteur;
+let d = charger(), mois = auj().slice(0, 7), pre = null, cible = null, edition = null, avant = null, q = '', minuteur;
 
 const cpt = i => d.comptes.find(c => c.id === i);
 const actifs = (...types) => d.comptes.filter(c => !c.archive && (!types.length || types.includes(c.type)));
@@ -296,18 +314,63 @@ const ligneRec = r => ligne(
   fmt(r.montant, dev(r.compte)),
   bTexte('payer', r, 'Payer') + bNom(r) + bSuppr('supprRec', r));
 
+const ligneOp = o => {
+  const tr = o.type === 'transfert', dv = dev(o.compte), change = tr && dev(o.vers) !== dv;
+  return ligne(
+    tr ? 'Transfert' : esc(nomCat(o.categorie)),
+    `${esc(nomC(o.compte))}${tr ? ' → ' + esc(nomC(o.vers)) : ''}${o.note ? ' · ' + esc(o.note) : ''}`,
+    `<span class="${o.type === 'entree' ? 'plus' : tr ? '' : 'moins'}">${o.type === 'entree' ? '+' : tr ? '' : '−'}${fmt(o.montant, dv)}</span>${change ? `<small>→ ${fmt(o.montantVers, dev(o.vers))} · taux ${nf.format(o.taux)}</small>` : ''}`,
+    (cpt(o.compte)?.archive || cpt(o.vers)?.archive ? '' : bIcone('modifier', o, 'Modifier', 'nom')) + bSuppr('supprOp', o));
+};
+// Sans recherche : le mois choisi. Avec recherche : tout l'historique.
+function opsVisibles() {
+  const t = q.trim().toLowerCase();
+  return d.ops.filter(o => t
+    ? [o.note, o.type === 'transfert' ? 'transfert' : nomCat(o.categorie), nomC(o.compte), o.vers ? nomC(o.vers) : '', o.montant / 100, o.date, dateFr(o.date)].join(' ').toLowerCase().includes(t)
+    : o.date.startsWith(mois)).sort((a, b) => b.date.localeCompare(a.date));
+}
+function histo() {
+  const ops = opsVisibles(), parJour = {};
+  ops.forEach(o => { if (o.type === 'sortie') parJour[o.date] = (parJour[o.date] || 0) + enPrincipale(o); });
+  let jour = '';
+  const lignes = ops.flatMap(o => {
+    const tete = o.date === jour ? [] : [`<li class="jour"><span>${dateFr(o.date)}</span><span>${parJour[o.date] ? '−' + fmt(parJour[o.date], d.principale) : ''}</span></li>`];
+    jour = o.date;
+    return [...tete, ligneOp(o)];
+  });
+  return liste(lignes, q.trim() ? 'Aucune opération ne correspond à cette recherche.' : 'Aucune opération ce mois-ci.');
+}
+// Une cellule qui commence par = + - @ serait exécutée comme formule par un tableur : on la neutralise.
+const celluleCsv = v => { v = String(v ?? ''); return '"' + (/^[=+\-@]/.test(v) ? "'" : '') + v.replace(/"/g, '""') + '"'; };
+console.assert(celluleCsv('=1+1') === `"'=1+1"` && celluleCsv('a"b') === '"a""b"' && celluleCsv(12) === '"12"', 'celluleCsv() est faux');
+function telecharger(nom, contenu, type) {
+  const fichier = new File([contenu], nom, { type });
+  // Sur téléphone, la feuille de partage permet d'enregistrer dans Fichiers ou iCloud.
+  if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [fichier] })) return navigator.share({ files: [fichier] });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(fichier);
+  a.download = nom;
+  a.click();
+  return Promise.resolve();
+}
+const moisTexte = (m, forme) => new Date(m + '-01T00:00:00').toLocaleDateString('fr-FR', forme === 'court' ? { month: 'short' } : { month: 'long', year: 'numeric' });
+
 const vues = {
   tableau() {
     const s = soldes(d.ops);
     const total = (signe, ...types) => { const p = { CDF: 0, USD: 0 }; actifs(...types).forEach(c => p[c.devise] += signe * (s[c.id] || 0)); return p; };
     const possede = total(1, 'banque', 'especes', 'mobile', 'epargne', 'investissement', 'evenement', 'pret'), dois = total(-1, 'emprunt');
     const net = enPrincipal(possede) - enPrincipal(dois);
-    const duMois = d.ops.filter(o => o.date.startsWith(mois));
-    const tot = t => duMois.filter(o => o.type === t).reduce((a, o) => a + enPrincipale(o), 0);
-    const reste = tot('entree') - tot('sortie');
+    const somme = (m, t) => d.ops.filter(o => o.date.startsWith(m) && o.type === t).reduce((a, o) => a + enPrincipale(o), 0);
+    const entrees = somme(mois, 'entree'), sorties = somme(mois, 'sortie'), reste = entrees - sorties;
+    // Les six mois qui finissent au mois choisi.
+    const flux = Array.from({ length: 6 }, (_, i) => { const t = new Date(mois + '-01T00:00:00Z'); t.setUTCMonth(t.getUTCMonth() - 5 + i); const m = t.toISOString().slice(0, 7); return { m, e: somme(m, 'entree'), s: somme(m, 'sortie') }; });
+    const maxF = Math.max(1, ...flux.flatMap(f => [f.e, f.s]));
     const parCat = {};
-    duMois.filter(o => o.type === 'sortie').forEach(o => parCat[o.categorie] = (parCat[o.categorie] || 0) + enPrincipale(o));
-    const cats = Object.entries(parCat).sort((a, b) => b[1] - a[1]), max = cats[0]?.[1] || 1;
+    d.ops.filter(o => o.date.startsWith(mois) && o.type === 'sortie').forEach(o => parCat[o.categorie] = (parCat[o.categorie] || 0) + enPrincipale(o));
+    const cats = d.categories.filter(c => c.type === 'sortie' && (parCat[c.id] || c.budget)).map(c => ({ c, m: parCat[c.id] || 0 })).sort((a, b) => b.m - a.m);
+    const maxC = cats[0]?.m || 1;
+    const budgets = cats.filter(x => x.c.budget), budgetReste = budgets.reduce((a, x) => a + x.c.budget - x.m, 0);
     const jSauv = d.sauvegarde ? -jours(d.sauvegarde) : null;
     const rappel = d.ops.length && (jSauv === null || jSauv >= 7)
       ? `<p class="bloc rappel"><span>${jSauv === null ? 'Vos données n’ont jamais été sauvegardées.' : `Dernière sauvegarde il y a ${jSauv} jours.`}</span><button class="sec" data-act="exporter">Sauvegarder</button></p>` : '';
@@ -321,6 +384,14 @@ const vues = {
         esc(e.nom), `Évènement · ${dateFr(e.date)} ${echeance(e.date)}`,
         fmt(s[e.id] || 0, e.devise) + (e.objectif ? `<small>sur ${fmt(e.objectif, e.devise)}</small>` : ''), bTexte('mettre', e, 'Mettre de côté'))]),
     ].sort((a, b) => a[0].localeCompare(b[0])).map(x => x[1]);
+    const ligneCat = ({ c, m }) => {
+      const b = c.budget, part = b ? m / b : m / maxC;
+      const etat = !b ? '' : m > b ? '<span class="badge retard">Dépassé</span>' : m >= .8 * b ? '<span class="badge">Bientôt atteint</span>' : '';
+      return `<li class="ligne"><div class="txt"><strong>${esc(c.nom)} ${etat}</strong>
+        <small>${b ? `${fmt(m, d.principale)} sur ${fmt(b, d.principale)}` : `${Math.round(m / (sorties || 1) * 100)} % des dépenses du mois`}</small>
+        <div class="barre${b && m > b ? ' depasse' : ''}"><i style="width:${Math.min(100, Math.round(part * 100))}%"></i></div></div>
+        <div class="droite">${fmt(m, d.principale)}</div><div class="btns">${bIcone('renommer', c, b ? 'Modifier le budget de' : 'Fixer un budget pour', 'nom')}</div></li>`;
+    };
     return `
       <div class="tete"><h1>Tableau de bord</h1><a class="btn fab" href="#operations">Ajouter une opération</a></div>
       ${rappel}
@@ -334,6 +405,19 @@ const vues = {
         </div>
       </section>
       ${aVenir.length ? `<h2>À ne pas oublier</h2>${liste(aVenir)}` : ''}
+      <div class="tete"><h2>Entrées et sorties</h2>${choixMois()}</div>
+      <div class="graph">${flux.map(f => `<button class="col" data-act="mois" data-id="${f.m}" aria-pressed="${f.m === mois}" aria-label="${moisTexte(f.m)} : entrées ${fmt(f.e, d.principale)}, sorties ${fmt(f.s, d.principale)}">
+        <span class="paire"><i class="e" style="height:${f.e / maxF * 100}%"></i><i class="s" style="height:${f.s / maxF * 100}%"></i></span><small>${moisTexte(f.m, 'court')}</small></button>`).join('')}</div>
+      <p class="legende"><span class="e"></span>Entrées<span class="s"></span>Sorties · touchez un mois pour l'afficher</p>
+      <div class="cartes">
+        <div class="carte"><span>Entrées</span><b class="plus">${fmtTuile(entrees, d.principale)}</b></div>
+        <div class="carte"><span>Sorties</span><b class="moins">${fmtTuile(sorties, d.principale)}</b></div>
+        <div class="carte"><span>Reste du mois</span><b class="${reste < 0 ? 'moins' : ''}">${fmtTuile(reste, d.principale)}</b></div>
+        ${budgets.length ? `<div class="carte"><span>Budget restant</span><b class="${budgetReste < 0 ? 'moins' : ''}">${fmtTuile(budgetReste, d.principale)}</b></div>` : ''}
+      </div>
+      <h2>Dépenses par catégorie</h2>
+      ${liste(cats.map(ligneCat), 'Aucune dépense ce mois-ci.')}
+      <p class="aide">Le crayon fixe un budget mensuel pour une catégorie, dans la devise des totaux.</p>
       <h2>Répartition</h2>
       <div class="cartes">
         ${carte('Disponible', total(1, 'banque', 'especes', 'mobile'))}
@@ -342,20 +426,11 @@ const vues = {
         ${carte('Mis de côté', total(1, 'evenement'))}
         ${carte('On me doit', total(1, 'pret'))}
       </div>
-      <div class="tete"><h2>Ce mois</h2>${choixMois()}</div>
-      <div class="cartes">
-        <div class="carte"><span>Entrées</span><b class="plus">${fmtTuile(tot('entree'), d.principale)}</b></div>
-        <div class="carte"><span>Sorties</span><b class="moins">${fmtTuile(tot('sortie'), d.principale)}</b></div>
-        <div class="carte"><span>Reste du mois</span><b class="${reste < 0 ? 'moins' : ''}">${fmtTuile(reste, d.principale)}</b></div>
-      </div>
-      <h2>Dépenses par catégorie</h2>
-      ${liste(cats.map(([c, m]) => `<li class="ligne"><div class="txt"><strong>${esc(nomCat(c))}</strong><div class="barre"><i style="width:${Math.round(m / max * 100)}%"></i></div></div><div class="droite">${fmt(m, d.principale)}</div></li>`), 'Aucune dépense ce mois-ci.')}
       <h2>Comptes</h2>
       ${liste(actifs(...REELS).map(c => ligne(esc(c.nom), TYPES[c.type], `<span class="${(s[c.id] || 0) < 0 ? 'moins' : ''}">${fmt(s[c.id] || 0, c.devise)}</span>`)), 'Aucun compte. Ajoutez-en dans les paramètres.')}`;
   },
 
   operations() {
-    const ops = d.ops.filter(o => o.date.startsWith(mois)).sort((a, b) => b.date.localeCompare(a.date));
     return `
       <h1>Opérations</h1>
       <form id="fOp" class="bloc saisie">
@@ -372,14 +447,12 @@ const vues = {
         <div class="btns"><button id="bOp"></button><button type="button" class="sec" id="bAnnuler" data-act="annulerEdition" hidden>Annuler</button></div>
       </form>
       <div class="tete"><h2>Historique</h2>${choixMois()}</div>
-      ${liste(ops.map(o => {
-        const tr = o.type === 'transfert', dv = dev(o.compte), change = tr && dev(o.vers) !== dv;
-        return ligne(
-          tr ? 'Transfert' : esc(nomCat(o.categorie)),
-          `${dateFr(o.date)} · ${esc(nomC(o.compte))}${tr ? ' → ' + esc(nomC(o.vers)) : ''}${o.note ? ' · ' + esc(o.note) : ''}`,
-          `<span class="${o.type === 'entree' ? 'plus' : tr ? '' : 'moins'}">${o.type === 'entree' ? '+' : tr ? '' : '−'}${fmt(o.montant, dv)}</span>${change ? `<small>→ ${fmt(o.montantVers, dev(o.vers))} · taux ${nf.format(o.taux)}</small>` : ''}`,
-          (cpt(o.compte)?.archive || cpt(o.vers)?.archive ? '' : bIcone('modifier', o, 'Modifier', 'nom')) + bSuppr('supprOp', o));
-      }), 'Aucune opération ce mois-ci.')}`;
+      <div class="outils">
+        <label class="sr" for="q">Rechercher dans tout l'historique</label>
+        <input type="search" id="q" name="q" placeholder="Rechercher : note, catégorie, compte, montant" value="${esc(q)}">
+        <button type="button" class="sec" data-act="csv">Exporter en CSV</button>
+      </div>
+      <div id="histo">${histo()}</div>`;
   },
 
   evenements() {
@@ -634,28 +707,32 @@ const actions = {
   rembourser(i) { versOperations(cpt(i).type === 'emprunt' ? { vers: i } : { compte: i }); },
   renommer(i) {
     cible = [...d.comptes, ...d.categories, ...d.recurrents].find(x => x.id === i);
-    document.querySelector('#fNom [name=nom]').value = cible.nom;
+    const f = document.getElementById('fNom'), avecBudget = d.categories.includes(cible) && cible.type === 'sortie';
+    f.nom.value = cible.nom;
+    document.getElementById('lBudget').hidden = !avecBudget;
+    document.getElementById('dBudget').textContent = d.principale;
+    f.budget.value = avecBudget && cible.budget ? cible.budget / 100 : '';
     document.getElementById('dlg').showModal();
   },
-  exporter() {
-    const nom = 'depenses-' + auj() + '.json', fichier = new File([JSON.stringify(d, null, 2)], nom, { type: 'application/json' });
-    const fait = () => { d.sauvegarde = auj(); sauver(); };
-    // Sur téléphone, la feuille de partage permet d'enregistrer dans Fichiers ou iCloud.
-    if (matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [fichier] })) navigator.share({ files: [fichier] }).then(fait, () => {});
-    else {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(fichier);
-      a.download = nom;
-      a.click();
-      fait();
-    }
+  mois(i) { mois = i; rendre(); document.querySelector(`[data-act=mois][data-id="${i}"]`)?.focus(); },
+  csv() {
+    const lignes = opsVisibles().map(o => { const tr = o.type === 'transfert'; return [o.date, tr ? 'Transfert' : SENS[o.type], tr ? '' : nomCat(o.categorie), nomC(o.compte), tr ? nomC(o.vers) : '',
+      (o.montant / 100).toFixed(2).replace('.', ','), dev(o.compte), o.taux, o.note].map(celluleCsv).join(';'); });
+    if (!lignes.length) return 'Aucune opération à exporter.';
+    // Point-virgule et BOM : c'est ce qu'attend Excel en français.
+    telecharger(`operations-${q.trim() ? 'recherche' : mois}.csv`, '\ufeff' + ['Date;Type;Catégorie;Compte;Vers;Montant;Devise;Taux;Note', ...lignes].join('\r\n'), 'text/csv').catch(() => {});
   },
+  exporter() { telecharger('depenses-' + auj() + '.json', JSON.stringify(d, null, 2), 'application/json').then(() => { d.sauvegarde = auj(); sauver(); }, () => {}); },
 };
 
 document.addEventListener('submit', e => {
   const f = e.target;
   if (f.id === 'fNom') { // method="dialog" : le navigateur ferme la fenêtre
-    if (e.submitter?.value === 'ok' && cible && f.nom.value.trim()) { cible.nom = f.nom.value.trim(); sauver(); }
+    if (e.submitter?.value === 'ok' && cible && f.nom.value.trim()) {
+      cible.nom = f.nom.value.trim();
+      if (!document.getElementById('lBudget').hidden) { const b = centimes(f.budget.value || 0); if (b > 0) cible.budget = b; else delete cible.budget; }
+      sauver();
+    }
     return;
   }
   if (f.method === 'dialog') return;
@@ -673,7 +750,10 @@ document.addEventListener('click', e => {
   const err = actions[b.dataset.act](b.dataset.id);
   if (err) dire(err);
 });
-document.addEventListener('input', e => { if (e.target.name === 'montant' && e.target.form.id === 'fOp') majForm(); });
+document.addEventListener('input', e => {
+  if (e.target.name === 'montant' && e.target.form?.id === 'fOp') majForm();
+  else if (e.target.name === 'q') { q = e.target.value; document.getElementById('histo').innerHTML = histo(); } // sans tout redessiner, pour garder le curseur
+});
 document.addEventListener('change', async e => {
   const t = e.target;
   if (t.name === 'mois' && t.value) { mois = t.value; rendre(); }
