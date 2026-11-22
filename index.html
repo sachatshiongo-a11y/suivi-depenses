@@ -87,7 +87,7 @@
   /* iPhone : sans cela, Safari dessine ses propres listes (plus basses que les champs) et ses champs de date débordent de leur carte. */
   input, select { -webkit-appearance: none; appearance: none; height: 2.75rem; min-width: 0; max-width: 100%; }
   select { padding-right: 2.25rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748B' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right .7rem center; background-size: 1.1rem; }
-  input[type=date], input[type=month] { display: block; text-align: left; }
+  input[type=date], input[type=month] { display: block; text-align: left; line-height: calc(2.75rem - 2px); } /* sur iPhone, la date se collait en haut du champ */
   input::-webkit-date-and-time-value { text-align: left; }
   input[type=file] { height: auto; }
   input[type=file] { padding: var(--s2); }
@@ -197,7 +197,7 @@
   details.ajout { margin: 0 0 var(--s3); padding: 0 var(--s4); }
   details.ajout > summary { display: flex; align-items: center; gap: var(--s2); min-height: 3rem; padding: 0; color: var(--fg); font-size: 1rem; font-weight: 600; list-style: none; }
   details.ajout > summary::-webkit-details-marker { display: none; }
-  details.ajout > form.bloc { margin: 0; padding: var(--s2) 0 var(--s4); border: 0; background: none; }
+  details.ajout > form.bloc { margin: 0; padding: var(--s2) 0 var(--s4); border: 0; background: none; box-shadow: none; }
   dialog { border: 0; border-radius: var(--r); background: var(--card); color: var(--fg); padding: 1.25rem; width: min(24rem, calc(100vw - 2rem)); box-shadow: 0 18px 40px rgba(0, 0, 0, .3); }
   dialog::backdrop { background: rgba(2, 6, 23, .55); }
   dialog form { display: grid; gap: var(--s3); }
