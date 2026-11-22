@@ -202,6 +202,9 @@
   dialog::backdrop { background: rgba(2, 6, 23, .55); }
   dialog form { display: grid; gap: var(--s3); }
   dialog p { margin: 0; color: var(--muted); }
+  dialog { max-height: 90dvh; overflow: auto; }
+  #impReglages { display: grid; gap: var(--s3); }
+  button:disabled { opacity: .5; cursor: default; }
   #imgRecu { display: block; max-width: 100%; max-height: 70vh; margin: 0 auto; border-radius: .5rem; }
   dialog .btns { justify-content: flex-end; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -239,6 +242,16 @@
   <form method="dialog">
     <img id="imgRecu" alt="Photo du reçu">
     <div class="btns"><button class="sec" value="retirer">Retirer la photo</button><button value="ok">Fermer</button></div>
+  </form>
+</dialog>
+<dialog id="dlgImp" aria-labelledby="impTitre">
+  <form method="dialog" id="fImp">
+    <strong id="impTitre">Importer un relevé</strong>
+    <p>Fichier CSV exporté depuis votre banque ou votre mobile money. Un fichier Excel doit d'abord être enregistré au format CSV.</p>
+    <label>Fichier du relevé <input type="file" name="releve" accept=".csv,.txt,text/csv,text/plain"></label>
+    <div id="impReglages" hidden></div>
+    <p id="impApercu" role="status"></p>
+    <div class="btns"><button class="sec" value="annuler">Annuler</button><button value="ok" id="bImp" disabled>Importer</button></div>
   </form>
 </dialog>
 <dialog id="conf" aria-labelledby="confTitre" aria-describedby="confDetail">
@@ -444,6 +457,108 @@ const champsDe = x => d.recurrents.includes(x) ? ['montant', 'periode', 'prochai
   : d.categories.includes(x) ? (x.type === 'sortie' ? ['budget', 'budgetPeriode'] : [])
   : x.type === 'evenement' ? ['objectif', 'date'] : x.type === 'emprunt' || x.type === 'pret' ? ['echeance'] : [];
 
+// ----- Import d'un relevé bancaire ou mobile money (fichier CSV) -----
+// Lit un CSV : séparateur deviné sur la première ligne, champs entre guillemets acceptés.
+function lireCsv(texte) {
+  const l1 = texte.split(/\r?\n/).find(l => l.trim()) || '';
+  const sep = [';', '\t', ','].sort((a, b) => l1.split(b).length - l1.split(a).length)[0];
+  const lignes = [];
+  let champ = '', ligne = [], guillemets = false;
+  for (let i = 0; i < texte.length; i++) {
+    const c = texte[i];
+    if (guillemets) { if (c === '"' && texte[i + 1] === '"') { champ += '"'; i++; } else if (c === '"') guillemets = false; else champ += c; }
+    else if (c === '"') guillemets = true;
+    else if (c === sep) { ligne.push(champ); champ = ''; }
+    else if (c === '\n') { ligne.push(champ); lignes.push(ligne); ligne = []; champ = ''; }
+    else if (c !== '\r') champ += c;
+  }
+  if (champ || ligne.length) { ligne.push(champ); lignes.push(ligne); }
+  return lignes.filter(l => l.some(x => x.trim()));
+}
+// Date d'un relevé : année d'abord (2026-11-05) ou jour d'abord (05/11/2026, 5.11.26), jamais mois d'abord.
+function lireDate(t) {
+  const iso = (a, m, j) => { const r = `${a}-${String(m).padStart(2, '0')}-${String(j).padStart(2, '0')}`; return m >= 1 && m <= 12 && j >= 1 && j <= 31 && !isNaN(Date.parse(r)) ? r : null; };
+  const x = String(t ?? '').trim();
+  let m = x.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if (m) return iso(m[1], +m[2], +m[3]);
+  m = x.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}|\d{2})(?!\d)/);
+  return m ? iso(m[3].length === 2 ? '20' + m[3] : m[3], +m[2], +m[1]) : null;
+}
+// Montant en centimes. Le dernier point ou la dernière virgule est décimal s'il est suivi d'un ou deux chiffres ; sinon c'est un séparateur de milliers.
+function lireMontant(t) {
+  let x = String(t ?? '').replace(/[^\d,.\-()]/g, '');
+  if (!/\d/.test(x)) return null;
+  const negatif = x.includes('-') || /^\(.*\)$/.test(x);
+  x = x.replace(/[()\-]/g, '');
+  const dec = Math.max(x.lastIndexOf(','), x.lastIndexOf('.')), apres = x.length - dec - 1;
+  const [ent, fr] = dec >= 0 && apres >= 1 && apres <= 2 ? [x.slice(0, dec), x.slice(dec + 1)] : [x, '0'];
+  const n = Math.round(Number(ent.replace(/[,.]/g, '') + '.' + fr) * 100);
+  return isNaN(n) ? null : negatif ? -n : n;
+}
+console.assert(JSON.stringify(lireCsv('a;b\r\n"x;y";"z ""q"""\n\n')) === '[["a","b"],["x;y","z \\"q\\""]]' && lireCsv('a,b,c\n1,2,3')[1].length === 3, 'lireCsv() est faux');
+console.assert(lireDate('05/11/2026') === '2026-11-05' && lireDate('2026-11-05 14:02') === '2026-11-05' && lireDate('5.11.26') === '2026-11-05' && lireDate('31/02/2026') !== '2026-02-31x' && lireDate('13/13/2026') === null && lireDate('LOYER') === null, 'lireDate() est faux');
+console.assert(lireMontant('1 234,56') === 123456 && lireMontant('1,234.56') === 123456 && lireMontant('1.234') === 123400 && lireMontant('12,5') === 1250 && lireMontant('-500') === -50000 && lireMontant('(500)') === -50000 && lireMontant('400 000 CDF') === 40000000 && lireMontant('abc') === null, 'lireMontant() est faux');
+
+let releve = null, importPret = []; // lignes du fichier choisi ; opérations prêtes à importer
+async function majImport(t) {
+  const zone = document.getElementById('impReglages');
+  if (t.name === 'releve') {
+    releve = null;
+    zone.hidden = true;
+    if (t.files[0]) {
+      const octets = await t.files[0].arrayBuffer();
+      let texte;
+      try { texte = new TextDecoder('utf-8', { fatal: true }).decode(octets); } catch { texte = new TextDecoder('windows-1252').decode(octets); } // beaucoup de banques exportent en Windows-1252
+      const lignes = lireCsv(texte);
+      if (lignes.length >= 2 && Math.max(...lignes.map(l => l.length)) >= 2) {
+        const titres = !lignes[0].some(c => lireDate(c)); // une première ligne sans date est une ligne de titres
+        const noms = lignes[0].map((c, i) => titres && c.trim() ? c.trim() : 'Colonne ' + (i + 1));
+        releve = titres ? lignes.slice(1) : lignes;
+        const devine = re => noms.findIndex(n => re.test(n.toLowerCase()));
+        const col = (nom, libelle, choisi) => `<label>${libelle} <select name="${nom}"><option value="-1">Aucune</option>${noms.map((n, i) => `<option value="${i}"${i === choisi ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>`;
+        const cDate = devine(/date/) >= 0 ? devine(/date/) : releve[0].findIndex(c => lireDate(c));
+        zone.innerHTML = `<label>Compte du relevé <select name="compteImp">${optsComptes(...REELS)}</select></label>
+          ${col('cDate', 'Colonne de la date', cDate)}${col('cLib', 'Colonne du libellé', devine(/libell|descri|motif|d[ée]tail|narrat|objet|r[ée]f[ée]rence/))}
+          ${col('cMontant', 'Colonne du montant', devine(/montant|amount/))}${col('cDebit', 'Colonne des débits', devine(/d[ée]bit|retrait/))}${col('cCredit', 'Colonne des crédits', devine(/cr[ée]dit|d[ée]p[oô]t/))}
+          <label>Dans la colonne du montant, un nombre positif est <select name="positif"><option value="entree">une entrée</option><option value="sortie">une dépense</option></select></label>
+          <label>Catégorie des dépenses importées <select name="catSortie">${optsCat('sortie')}</select></label>
+          <label>Catégorie des entrées importées <select name="catEntree">${optsCat('entree')}</select></label>`;
+        // Par défaut, on range dans « Autre » plutôt que dans la première catégorie de la liste.
+        for (const [champ, type] of [['catSortie', 'sortie'], ['catEntree', 'entree']]) { const autre = d.categories.find(c => c.type === type && c.nom === 'Autre'); if (autre) zone.querySelector(`[name=${champ}]`).value = autre.id; }
+        zone.hidden = false;
+      }
+    }
+  }
+  apercuImport(t.name === 'releve' && t.files[0] && !releve);
+}
+function opsImport() {
+  const f = document.getElementById('fImp');
+  if (!releve || !f.compteImp) return [];
+  const n = k => Number(f[k].value), cDate = n('cDate'), cLib = n('cLib'), cM = n('cMontant'), cD = n('cDebit'), cC = n('cCredit'), ops = [];
+  for (const l of releve) {
+    const date = lireDate(l[cDate]);
+    if (!date) continue;
+    // m > 0 : une entrée. Les colonnes débit et crédit passent avant la colonne montant.
+    const m = cD >= 0 || cC >= 0 ? Math.abs(lireMontant(l[cC]) || 0) - Math.abs(lireMontant(l[cD]) || 0) : cM >= 0 ? (lireMontant(l[cM]) || 0) * (f.positif.value === 'sortie' ? -1 : 1) : 0;
+    const type = m > 0 ? 'entree' : 'sortie', categorie = type === 'entree' ? f.catEntree.value : f.catSortie.value;
+    if (m && categorie) ops.push({ id: id(), date, type, montant: Math.abs(m), compte: f.compteImp.value, categorie, taux: d.taux, note: String(l[cLib] ?? '').trim().slice(0, 80) });
+  }
+  return ops;
+}
+function apercuImport(illisible) {
+  const p = document.getElementById('impApercu'), b = document.getElementById('bImp');
+  const ops = opsImport(), existe = o => d.ops.some(x => x.compte === o.compte && x.date === o.date && x.type === o.type && x.montant === o.montant && (x.note || '') === o.note);
+  importPret = ops.filter(o => !existe(o));
+  b.disabled = !importPret.length;
+  b.textContent = importPret.length ? `Importer ${importPret.length} opérations` : 'Importer';
+  const dates = importPret.map(o => o.date).sort(), ex = importPret[0], deja = ops.length - importPret.length;
+  p.textContent = illisible ? 'Ce fichier ne ressemble pas à un relevé : il faut un fichier CSV avec au moins deux colonnes et deux lignes.'
+    : !releve ? 'Choisissez le fichier du relevé.'
+    : !ops.length ? `Aucune opération lisible sur ${releve.length} lignes : vérifiez les colonnes de la date et du montant, et qu’il existe une catégorie de chaque type.`
+    : `${ops.length} opérations lisibles sur ${releve.length} lignes${deja ? `, dont ${deja} déjà présentes et ignorées` : ''}.`
+      + (ex ? ` Du ${dateFr(dates[0])} au ${dateFr(dates.at(-1))}. Première : ${dateFr(ex.date)}, ${ex.note || 'sans libellé'}, ${ex.type === 'entree' ? '+' : '−'}${nombre(ex.montant)} ${dev(ex.compte)}.` : '');
+}
+
 const vues = {
   tableau() {
     const s = soldes(d.ops);
@@ -546,6 +661,7 @@ const vues = {
         <label class="sr" for="q">Rechercher dans tout l'historique</label>
         <input type="search" id="q" name="q" placeholder="Rechercher une opération" value="${esc(q)}">
         <button type="button" class="sec" data-act="csv">Exporter en CSV</button>
+        <button type="button" class="sec" data-act="importReleve">Importer un relevé</button>
       </div>
       <div id="histo">${histo()}</div>`;
   },
@@ -888,6 +1004,13 @@ const actions = {
     // Point-virgule et BOM : c'est ce qu'attend Excel en français.
     telecharger(`operations-${q.trim() ? 'recherche' : mois}.csv`, '\ufeff' + ['Date;Type;Catégorie;Compte;Vers;Montant;Devise;Taux;Note;Reçu', ...lignes].join('\r\n'), 'text/csv').catch(() => {});
   },
+  importReleve() {
+    document.getElementById('fImp').reset();
+    releve = null;
+    document.getElementById('impReglages').hidden = true;
+    apercuImport();
+    document.getElementById('dlgImp').showModal();
+  },
   exporter() {
     const envoyer = contenu => telecharger('depenses-' + auj() + '.json', contenu, 'application/json').then(() => { d.sauvegarde = auj(); sauver(); }, () => {});
     if (!d.ops.some(o => o.recu)) return void envoyer(JSON.stringify(d, null, 2));
@@ -931,6 +1054,13 @@ document.addEventListener('submit', e => {
     }
     return;
   }
+  if (f.id === 'fImp') {
+    if (e.submitter?.value === 'ok' && importPret.length) {
+      const ops = importPret;
+      faire(`${ops.length} opérations importées sur ${nomC(ops[0].compte)}.`, () => { d.ops.push(...ops); mois = ops.map(o => o.date).sort().at(-1).slice(0, 7); });
+    }
+    return;
+  }
   if (f.method === 'dialog') return;
   e.preventDefault();
   if (!ajouts[f.id]) return;
@@ -953,6 +1083,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', async e => {
   const t = e.target;
+  if (t.form?.id === 'fImp') return majImport(t);
   if (t.name === 'mois' && t.value) { mois = t.value; rendre(); }
   else if (t.form?.id === 'fOp' && ['type', 'compte', 'vers'].includes(t.name)) majForm(t.name === 'type');
   else if (t.name === 'genre' && t.form?.id === 'fRec') t.form.categorie.innerHTML = optsCat(t.value === 'entree' ? 'entree' : 'sortie'); // les catégories suivent le genre
