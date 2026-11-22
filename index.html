@@ -820,9 +820,14 @@ function majForm(refaire) {
     document.getElementById('aideRecu').textContent = `Au taux des paramètres (1 USD = ${nf.format(d.taux)} CDF) : ${nombre(auto)} ${dvVers}. Corrigez si le change réel diffère.`;
   }
 }
+let vueAffichee = null;
+const tactile = matchMedia('(pointer: coarse)').matches;
 function rendre() {
   const vue = vues[location.hash.slice(1)] ? location.hash.slice(1) : 'tableau';
   if (vue !== 'operations') edition = null;
+  // Sur le même écran, on garde la position de défilement : l'écran ne saute pas quand on enregistre.
+  const y = vue === vueAffichee ? scrollY : 0;
+  vueAffichee = vue;
   document.querySelectorAll('nav a, header a').forEach(a => a.getAttribute('href') === '#' + vue ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
   document.getElementById('main').innerHTML = vues[vue]();
   if (vue === 'parametres') document.querySelector('#fTaux [name=principale]').value = d.principale;
@@ -840,6 +845,7 @@ function rendre() {
     majForm(true);
     pre = null;
   }
+  scrollTo(0, y);
 }
 function dire(msg, annulable) {
   const t = document.getElementById('toast');
@@ -964,7 +970,9 @@ const actions = {
   modifier(i) {
     const o = d.ops.find(x => x.id === i);
     if (cpt(o.compte)?.archive || cpt(o.vers)?.archive) return 'Cette opération touche un compte archivé : restaurez-le dans les paramètres pour la modifier.';
-    edition = i; rendre(); scrollTo(0, 0); document.querySelector('#fOp [name=montant]').focus();
+    edition = i; rendre();
+    scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); // on remonte vers le formulaire, en douceur
+    if (!tactile) document.querySelector('#fOp [name=montant]').focus({ preventScroll: true });
   },
   annulerEdition() { edition = null; rendre(); },
   supprCompte(i) {
@@ -1089,7 +1097,9 @@ document.addEventListener('submit', e => {
   if (err === false) return; // le formulaire a enregistré lui-même
   if (err) return dire(err);
   sauver();
-  document.querySelector(`#${f.id} input:not([type=radio]), #${f.id} select`)?.focus();
+  // Sur téléphone, on ferme le clavier plutôt que de rouvrir le premier champ, qui ferait remonter l'écran.
+  if (tactile) document.activeElement?.blur();
+  else document.querySelector(`#${f.id} input:not([type=radio]), #${f.id} select`)?.focus({ preventScroll: true });
 });
 document.addEventListener('click', e => {
   const b = e.target.closest('button[data-act]');
@@ -1128,7 +1138,7 @@ document.addEventListener('change', async e => {
   }
 });
 addEventListener('storage', e => { if (e.key === CLE) { d = charger(); rendre(); } }); // un autre onglet a enregistré : on reprend ses données
-addEventListener('hashchange', () => { rendre(); document.querySelector('#fOp [name=montant]')?.focus(); });
+addEventListener('hashchange', () => { rendre(); if (!tactile) document.querySelector('#fOp [name=montant]')?.focus({ preventScroll: true }); });
 rendre();
 nettoyerRecus();
 navigator.storage?.persist?.(); // demande au navigateur de ne pas effacer les données
