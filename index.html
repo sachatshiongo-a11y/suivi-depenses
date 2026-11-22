@@ -170,6 +170,11 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', appliquerT
   #verrou svg { width: 3rem; height: 3rem; }
   #verrou button { background: var(--hero-fg); color: var(--hero); min-width: 12rem; }
   #verrou small { color: var(--hero-muted); max-width: 18rem; }
+  a.btn.lien { display: inline-grid; place-items: center; background: transparent; color: var(--fg); border-color: var(--border); font-weight: 600; text-decoration: none; }
+  .ecart { font-size: .8rem; font-weight: 600; }
+  .ecart.hausse { color: var(--moins); } .ecart.baisse { color: var(--plus); }
+  .nav-periode { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); margin: 0 0 var(--s3); }
+  .nav-periode strong { text-align: center; flex: 1; }
   .rappel { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin: var(--s3) 0 0; padding-right: var(--s2); }
 
   #toast { position: fixed; left: 50%; bottom: calc(8.5rem + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: var(--s3); width: max-content; max-width: calc(100vw - 2rem); background: var(--fg); color: var(--bg); padding: var(--s2) var(--s2) var(--s2) var(--s4); min-height: 3.25rem; border-radius: var(--r); font-weight: 600; box-shadow: 0 8px 24px rgba(2, 6, 23, .3); }
@@ -228,6 +233,7 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', appliquerT
 <header>
   <span class="logo">Mes dépenses</span>
   <div class="btns">
+    <a class="icone" href="#rapport" aria-label="Rapports" title="Rapports"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></a>
     <button class="icone" data-act="theme" aria-label="Passer du thème clair au thème sombre, ou l'inverse" title="Changer de thème"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/></svg></button>
     <a class="icone" href="#parametres" aria-label="Paramètres" title="Paramètres"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h10M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg></a>
   </div>
@@ -589,7 +595,90 @@ function apercuImport(illisible) {
       + (ex ? ` Du ${dateFr(dates[0])} au ${dateFr(dates.at(-1))}. Première : ${dateFr(ex.date)}, ${ex.note || 'sans libellé'}, ${ex.type === 'entree' ? '+' : '−'}${nombre(ex.montant)} ${dev(ex.compte)}.` : '');
 }
 
+// ----- Rapports de la semaine et du mois -----
+let rapType = 'mois', rapRef = null; // rapRef : une date de la période affichée
+const decaler = (date, n) => { const t = new Date(date + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+function periode(type, ref) {
+  if (type === 'semaine') { const debut = lundi(ref); return { debut, fin: decaler(debut, 6), libelle: `Semaine du ${dateFr(debut)} au ${dateFr(decaler(debut, 6))}` }; }
+  const debut = ref.slice(0, 7) + '-01', t = new Date(debut + 'T00:00:00Z');
+  const fin = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+  const lib = moisTexte(ref.slice(0, 7));
+  return { debut, fin, libelle: lib[0].toUpperCase() + lib.slice(1) };
+}
+const precedente = (type, ref) => type === 'semaine' ? decaler(lundi(ref), -7) : decaler(ref.slice(0, 7) + '-01', -1);
+const suivante = (type, ref) => type === 'semaine' ? decaler(lundi(ref), 7) : decaler(periode('mois', ref).fin, 1);
+console.assert(periode('mois', '2026-02-14').fin === '2026-02-28' && periode('semaine', '2026-11-22').debut === '2026-11-16' && precedente('mois', '2026-03-31') === '2026-02-28' && suivante('mois', '2026-01-31') === '2026-02-01' && suivante('semaine', '2026-11-22') === '2026-11-23', 'périodes fausses');
+
+function chiffresPeriode(p) {
+  const ops = d.ops.filter(o => o.date >= p.debut && o.date <= p.fin);
+  const somme = t => ops.filter(o => o.type === t).reduce((a, o) => a + enPrincipale(o), 0);
+  const parCat = {};
+  ops.filter(o => o.type === 'sortie').forEach(o => parCat[o.categorie] = (parCat[o.categorie] || 0) + enPrincipale(o));
+  const misDeCote = ops.filter(o => o.type === 'transfert' && ['epargne', 'investissement', 'evenement'].includes(cpt(o.vers)?.type)).reduce((a, o) => a + conv(o.montantVers ?? o.montant, dev(o.vers), d.principale, o.taux), 0);
+  return { ops, entrees: somme('entree'), sorties: somme('sortie'), parCat, misDeCote };
+}
+// Écart avec la période précédente : une hausse de dépense est en rouge, une baisse en vert.
+function ecart(cur, prev, sens = 'depense') {
+  if (!prev) return cur ? '<span class="ecart">nouveau</span>' : '';
+  const pct = Math.round((cur - prev) / prev * 100);
+  if (!pct) return '<span class="ecart">stable</span>';
+  const mauvais = sens === 'depense' ? pct > 0 : pct < 0;
+  return `<span class="ecart ${mauvais ? 'hausse' : 'baisse'}">${pct > 0 ? '+' : '−'}${Math.abs(pct)} %</span>`;
+}
+function resumeTexte(p, c) {
+  const lignes = [`Mes dépenses · ${p.libelle}`, `Entrées : ${nombre(c.entrees)} ${d.principale}`, `Sorties : ${nombre(c.sorties)} ${d.principale}`, `Solde : ${nombre(c.entrees - c.sorties)} ${d.principale}`];
+  if (c.misDeCote) lignes.push(`Mis de côté : ${nombre(c.misDeCote)} ${d.principale}`);
+  const top = Object.entries(c.parCat).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  if (top.length) lignes.push('Principales dépenses : ' + top.map(([k, m]) => `${nomCat(k)} ${nombre(m)}`).join(', '));
+  return lignes.join('\n');
+}
+
 const vues = {
+  rapport() {
+    rapRef ||= auj();
+    const p = periode(rapType, rapRef), c = chiffresPeriode(p), pp = periode(rapType, precedente(rapType, rapRef)), cp = chiffresPeriode(pp);
+    const enCours = p.debut <= auj() && auj() <= p.fin, futur = p.debut > auj();
+    const jours = Math.round((Date.parse(enCours ? auj() : p.fin) - Date.parse(p.debut)) / 864e5) + 1;
+    const solde = c.entrees - c.sorties, nom = rapType === 'semaine' ? 'la semaine' : 'le mois', duNom = rapType === 'semaine' ? 'de la semaine' : 'du mois', avantNom = rapType === 'semaine' ? 'la semaine précédente' : 'le mois précédent';
+    const cats = [...new Set([...Object.keys(c.parCat), ...Object.keys(cp.parCat)])].map(k => ({ k, m: c.parCat[k] || 0, mp: cp.parCat[k] || 0 })).filter(x => x.m).sort((a, b) => b.m - a.m);
+    const grosses = c.ops.filter(o => o.type === 'sortie').sort((a, b) => enPrincipale(b) - enPrincipale(a)).slice(0, 5);
+    const parJourDep = {};
+    c.ops.filter(o => o.type === 'sortie').forEach(o => parJourDep[o.date] = (parJourDep[o.date] || 0) + enPrincipale(o));
+    const pire = Object.entries(parJourDep).sort((a, b) => b[1] - a[1])[0];
+    const parCompte = {};
+    c.ops.filter(o => o.type === 'sortie').forEach(o => parCompte[o.compte] = (parCompte[o.compte] || 0) + enPrincipale(o));
+    const budgets = rapType === 'mois' ? d.categories.filter(x => x.budget && x.budgetPeriode !== 'semaine') : d.categories.filter(x => x.budget && x.budgetPeriode === 'semaine');
+    return `
+      <div class="tete"><h1>Rapports</h1></div>
+      <div class="bloc"><fieldset><legend class="sr">Période du rapport</legend><div class="choix seg">${chips('rapType', [{ v: 'semaine', l: 'Semaine', sansPoint: 1 }, { v: 'mois', l: 'Mois', sansPoint: 1 }], rapType)}</div></fieldset></div>
+      <div class="nav-periode"><button class="icone" data-act="rapPrec" aria-label="Période précédente" title="Période précédente"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><strong>${p.libelle}</strong><button class="icone" data-act="rapSuiv" aria-label="Période suivante" title="Période suivante"${futur || enCours ? ' disabled' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></div>
+      ${!c.ops.length ? `<p class="bloc vide">Aucune opération sur ${nom}.</p>` : `
+      <section class="bloc net" aria-label="Solde de la période">
+        <span>Solde ${duNom}${enCours ? ' (en cours)' : ''}</span>
+        <b class="${solde < 0 ? 'moins' : ''}">${solde > 0 ? '+' : ''}${fmt(solde, d.principale)}</b>
+        <small>Pour ${avantNom} : ${fmt(cp.entrees - cp.sorties, d.principale)}</small>
+        <div class="deux">
+          <div><span>Entrées</span><strong>${fmt(c.entrees, d.principale)}</strong> ${ecart(c.entrees, cp.entrees, 'entree')}</div>
+          <div><span>Sorties</span><strong>${fmt(c.sorties, d.principale)}</strong> ${ecart(c.sorties, cp.sorties)}</div>
+        </div>
+      </section>
+      <div class="cartes" style="margin-top:var(--s3)">
+        <div class="carte teinte" style="--c:var(--usd)"><span>Dépense moyenne par jour</span><b>${fmtTuile(Math.round(c.sorties / jours / 100) * 100, d.principale)}</b><small>sur ${jours} jour${jours > 1 ? 's' : ''}</small></div>
+        <div class="carte teinte" style="--c:var(--violet)"><span>Mis de côté</span><b>${fmtTuile(c.misDeCote, d.principale)}</b><small>épargne, placements, évènements</small></div>
+        ${pire ? `<div class="carte teinte" style="--c:var(--moins)"><span>Jour le plus dépensier</span><b>${fmtTuile(pire[1], d.principale)}</b><small>${dateFr(pire[0])}</small></div>` : ''}
+        <div class="carte teinte" style="--c:var(--bleu)"><span>Opérations</span><b>${c.ops.length}</b><small>${c.ops.filter(o => o.type === 'sortie').length} dépenses</small></div>
+      </div>
+      <h2>Dépenses par catégorie</h2>
+      ${liste(cats.map(({ k, m, mp }) => ligne(esc(nomCat(k)), `${Math.round(m / (c.sorties || 1) * 100)} % des dépenses · ${mp ? 'avant : ' + fmt(mp, d.principale) : 'rien la période précédente'}`, `${fmt(m, d.principale)}<small>${ecart(m, mp)}</small>`, '', past(ini(nomCat(k)), couleurCat(k)))), 'Aucune dépense.')}
+      ${budgets.length ? `<h2>Budgets</h2>${liste(budgets.map(x => { const m = c.parCat[x.id] || 0; return ligne(esc(x.nom), `${fmt(m, d.principale)} sur ${fmt(x.budget, d.principale)}`, m > x.budget ? '<span class="badge retard">Dépassé</span>' : `<span class="plus">${Math.round(m / x.budget * 100)} %</span>`, '', past(ini(x.nom), couleurCat(x.id))); }))}` : ''}
+      <h2>Plus grosses dépenses</h2>
+      ${liste(grosses.map(ligneOp), 'Aucune dépense.')}
+      <h2>Par compte</h2>
+      ${liste(Object.entries(parCompte).sort((a, b) => b[1] - a[1]).map(([k, m]) => ligne(esc(nomC(k)), TYPES[cpt(k)?.type] ?? '', fmt(m, d.principale), '', past(esc(dev(k)), couleurDev(dev(k))))), 'Aucune dépense.')}
+      <form class="bloc"><button type="button" class="sec" data-act="partagerRapport">Partager le résumé</button></form>
+      <p class="aide">Montants convertis en ${esc(d.principale)} au taux de chaque opération. Les transferts entre vos comptes ne comptent ni en entrée ni en sortie.</p>`}`;
+  },
+
   tableau() {
     const s = soldes(d.ops);
     const total = (signe, ...types) => { const p = { CDF: 0, USD: 0 }; actifs(...types).forEach(c => p[c.devise] += signe * (s[c.id] || 0)); return p; };
@@ -654,6 +743,7 @@ const vues = {
       ${nbVerif() ? `<p class="bloc rappel"><span>${nbVerif()} opération${nbVerif() > 1 ? 's' : ''} importée${nbVerif() > 1 ? 's' : ''} à vérifier.</span><button class="sec" data-act="voirVerif">Vérifier</button></p>` : ''}
       ${aVenir.length ? `<h2>À ne pas oublier</h2>${liste(aVenir)}` : ''}
       <div class="tete"><h2>Entrées et sorties</h2>${choixMois()}</div>
+      <p class="outils"><a class="btn sec lien" href="#rapport" data-rap="semaine">Rapport de la semaine</a><a class="btn sec lien" href="#rapport" data-rap="mois">Rapport du mois</a></p>
       <div class="graph">${flux.map(f => `<button class="col" data-act="mois" data-id="${f.m}" aria-pressed="${f.m === mois}" aria-label="${moisTexte(f.m)} : entrées ${fmt(f.e, d.principale)}, sorties ${fmt(f.s, d.principale)}">
         <span class="paire"><i class="e" style="height:${f.e / maxF * 100}%"></i><i class="s" style="height:${f.s / maxF * 100}%"></i></span><small>${moisTexte(f.m, 'court')}</small></button>`).join('')}</div>
       <p class="legende"><span class="e"></span>Entrées<span class="s"></span>Sorties · touchez un mois pour l'afficher</p>
@@ -1019,6 +1109,7 @@ const actions = {
   modifier(i) {
     const o = d.ops.find(x => x.id === i);
     if (cpt(o.compte)?.archive || cpt(o.vers)?.archive) return 'Cette opération touche un compte archivé : restaurez-le dans les paramètres pour la modifier.';
+    if (location.hash !== '#operations') { edition = i; location.hash = 'operations'; return; } // depuis un rapport : on ouvre l'écran Opérations
     edition = i; rendre();
     scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); // on remonte vers le formulaire, en douceur
     if (!tactile) document.querySelector('#fOp [name=montant]').focus({ preventScroll: true });
@@ -1068,6 +1159,13 @@ const actions = {
       if (k === 'budgetPeriode' && cible.budgetPeriode !== 'semaine') f[k].value = 'mois';
     });
     document.getElementById('dlg').showModal();
+  },
+  rapPrec() { rapRef = precedente(rapType, rapRef || auj()); rendre(); },
+  rapSuiv() { rapRef = suivante(rapType, rapRef || auj()); rendre(); },
+  partagerRapport() {
+    const p = periode(rapType, rapRef || auj()), texte = resumeTexte(p, chiffresPeriode(p));
+    if (navigator.share) navigator.share({ text: texte }).catch(() => {});
+    else navigator.clipboard?.writeText(texte).then(() => { dire('Résumé copié.'); document.getElementById('toast').classList.remove('err'); }, () => dire('Le résumé n’a pas pu être copié.'));
   },
   mois(i) { mois = i; rendre(); document.querySelector(`[data-act=mois][data-id="${i}"]`)?.focus(); },
   csv() {
@@ -1160,6 +1258,8 @@ document.addEventListener('submit', e => {
   else document.querySelector(`#${f.id} input:not([type=radio]), #${f.id} select`)?.focus({ preventScroll: true });
 });
 document.addEventListener('click', e => {
+  const r = e.target.closest('a[data-rap]');
+  if (r) { rapType = r.dataset.rap; rapRef = auj(); }
   const b = e.target.closest('button[data-act]');
   if (!b) return;
   const err = actions[b.dataset.act](b.dataset.id);
@@ -1173,6 +1273,7 @@ document.addEventListener('input', e => {
 document.addEventListener('change', async e => {
   const t = e.target;
   if (t.form?.id === 'fImp') return majImport(t);
+  if (t.name === 'rapType') { rapType = t.value; return rendre(); }
   if (t.name === 'theme') { localStorage.setItem(CLE + '-theme', t.value); return appliquerTheme(); }
   if (t.name === 'mois' && t.value) { mois = t.value; rendre(); }
   else if (t.form?.id === 'fOp' && ['type', 'compte', 'vers'].includes(t.name)) majForm(t.name === 'type');
